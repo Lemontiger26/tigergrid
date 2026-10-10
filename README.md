@@ -4,13 +4,22 @@ A GitHub-style contribution graph of your AI coding agents: Claude Code and Code
 
 ```sh
 bun install
-bun src/cli.ts                      # prompts, last ~52 weeks (fits terminal width)
-bun src/cli.ts -m tokens -t claude  # Claude Code tokens only
-bun src/cli.ts -m ai --svg ai.svg   # AI-assisted commits, plus an embeddable SVG
-bun src/cli.ts --json               # per-day data
+bun start                    # prompts, last ~52 weeks (fits terminal width)
+bun start -m sessions        # pick the metric: prompts | sessions | tokens | commits | ai
+bun start -m tokens -t codex # ...and the tool: claude | codex | all
 ```
 
-Metrics: `prompts` · `sessions` · `tokens` · `commits` · `ai`. Run with `--help` for all flags.
+Run `bun start --help` for all flags.
+
+### Exports
+
+| Script | Output |
+| --- | --- |
+| `bun run svg` | `out/agentgrid.svg`, 53 weeks of prompts. Extra flags pass through: `bun run svg -m tokens -t claude` |
+| `bun run svg:all` | `out/agentgrid-<metric>.svg` for all five metrics |
+| `bun run json` | `out/agentgrid.json`, per-day sessions/prompts/tokens/commits/projects. Flags pass through too. |
+
+SVGs follow the viewer's `prefers-color-scheme`. Each metric has its own colour: lime (prompts), blue (sessions), violet (tokens), mint (commits), rose (AI-assisted commits). Light ramps run from pastel tag fills to saturated tag text; dark ramps go from dim tints to neon on a near-black card. Colours live in `PALETTES` / `THEME` in `src/grid.ts`.
 
 ## Sources and counting rules
 

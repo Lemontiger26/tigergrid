@@ -150,4 +150,4 @@ vite.config.ts.timestamp-*
 
 # Project outputs
 node_modules
-*.svg
+out/

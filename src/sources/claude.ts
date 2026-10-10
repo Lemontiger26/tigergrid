@@ -5,7 +5,15 @@ import { bumpProject, day, keyOfTimestamp, readJsonl, type Days } from '../days'
 
 const ROOT = join(homedir(), '.claude', 'projects');
 
-/** A real human prompt, not a tool result, slash-command echo, or injected meta message. */
+/**
+ * Decide whether a Claude Code transcript record is a prompt a human typed, as opposed to
+ * a tool result, a slash-command echo (`<command-name>…`), a task notification, or an
+ * injected meta/sidechain (sub-agent) message.
+ *
+ * @returns true for genuine human prompts.
+ * Called by: loadClaude.
+ * Calls: nothing.
+ */
 function isHumanPrompt(r: any): boolean {
 	if (r.type !== 'user' || r.isMeta || r.isSidechain) return false;
 	const kind = r.origin?.kind;
@@ -16,6 +24,17 @@ function isHumanPrompt(r: any): boolean {
 	return false;
 }
 
+/**
+ * Aggregate every Claude Code transcript under `~/.claude/projects` (including sub-agent
+ * files) into `days`: prompts and per-project prompt counts, distinct session ids, and fresh
+ * tokens (uncached input + cache writes + output, cache reads excluded). Records before
+ * `since` are ignored. Usage is deduplicated by message id, because one API response is
+ * written as several lines that all repeat the same usage block.
+ *
+ * @returns the number of transcript files scanned; mutates `days`.
+ * Called by: cli.
+ * Calls: readJsonl, keyOfTimestamp, day, bumpProject, isHumanPrompt.
+ */
 export async function loadClaude(days: Days, since: string): Promise<number> {
 	const seenMessages = new Set<string>();
 	let files = 0;
@@ -26,7 +45,6 @@ export async function loadClaude(days: Days, since: string): Promise<number> {
 			if (!key || key < since) continue;
 
 			if (r.type === 'assistant' && r.message?.usage) {
-				// One API response is split across several lines that all repeat the same usage.
 				const id = r.message.id ?? r.requestId;
 				if (id && seenMessages.has(id)) continue;
 				if (id) seenMessages.add(id);

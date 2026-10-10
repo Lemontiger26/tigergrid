@@ -9,7 +9,15 @@ const AI_MARKERS =
 
 const SKIP = new Set(['node_modules', 'vendor', 'dist', 'build', '.venv', 'Pods', 'DerivedData', 'target']);
 
-/** Walk down to maxDepth looking for .git entries, without descending into a repo once found. */
+/**
+ * Walk `dir` down to `maxDepth` levels looking for git repositories (a `.git` directory or
+ * worktree file). Stops descending once a repo is found and skips dot-dirs and dependency/
+ * build folders, so scanning `~/develop` stays fast.
+ *
+ * @returns absolute paths of the repositories found; unreadable directories yield none.
+ * Called by: loadGit, findRepos (recursion).
+ * Calls: readdir, findRepos.
+ */
 async function findRepos(dir: string, maxDepth: number): Promise<string[]> {
 	let entries: Dirent[];
 	try {
@@ -23,6 +31,13 @@ async function findRepos(dir: string, maxDepth: number): Promise<string[]> {
 	return (await Promise.all(subdirs.map((e) => findRepos(join(dir, e.name), maxDepth - 1)))).flat();
 }
 
+/**
+ * Run a git command against `repo`, discarding stderr (repos without commits just print nothing).
+ *
+ * @returns git's stdout as text.
+ * Called by: loadGit.
+ * Calls: Bun.spawn (git).
+ */
 async function git(repo: string, args: string[]): Promise<string> {
 	const p = Bun.spawn(['git', '-C', repo, ...args], { stdout: 'pipe', stderr: 'ignore' });
 	const out = await new Response(p.stdout).text();
@@ -30,6 +45,15 @@ async function git(repo: string, args: string[]): Promise<string> {
 	return out;
 }
 
+/**
+ * Count the user's commits per day across every repo under `roots`, and how many of them
+ * an agent co-authored (matched by AI_MARKERS). Commits are filtered by `authors`, limited to
+ * `since`, and deduplicated by hash because worktrees and clones share history.
+ *
+ * @returns the number of repositories scanned; mutates `days` (commits, aiCommits).
+ * Called by: cli.
+ * Calls: findRepos, git, keyOfTimestamp, day.
+ */
 export async function loadGit(days: Days, since: string, roots: string[], authors: string[]): Promise<number> {
 	const seen = new Set<string>();
 	const repos = (await Promise.all(roots.filter(existsSync).map((r) => findRepos(r, 4)))).flat();
@@ -40,7 +64,7 @@ export async function loadGit(days: Days, since: string, roots: string[], author
 			const out = await git(repo, ['log', '--all', `--since=${since}`, ...authorArgs, '--format=%H%x1f%aI%x1f%B%x1e']);
 			for (const entry of out.split('\x1e')) {
 				const [hash, date, body] = entry.trim().split('\x1f');
-				if (!hash || seen.has(hash)) continue; // worktrees and clones share commits
+				if (!hash || seen.has(hash)) continue;
 				seen.add(hash);
 				const key = keyOfTimestamp(date);
 				if (!key || key < since) continue;

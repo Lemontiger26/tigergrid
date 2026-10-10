@@ -7,7 +7,15 @@ import { bumpProject, day, keyOfTimestamp, readJsonl, type Days } from '../days'
 const CODEX = join(homedir(), '.codex');
 const ROOTS = ['sessions', 'archived_sessions'].map((d) => join(CODEX, d));
 
-/** Threads Codex imported from other agents (e.g. Claude Code); those are counted at their source. */
+/**
+ * Read Codex's import ledger, which lists threads Codex copied from other agents
+ * (e.g. Claude Code). Those copies carry the import time as their timestamp and are
+ * already counted at their source, so they must be skipped.
+ *
+ * @returns the set of imported Codex thread ids; empty if the ledger is missing or invalid.
+ * Called by: loadCodex.
+ * Calls: Bun.file().json.
+ */
 async function importedThreadIds(): Promise<Set<string>> {
 	try {
 		const ledger = await Bun.file(join(CODEX, 'external_agent_session_imports.json')).json();
@@ -17,9 +25,28 @@ async function importedThreadIds(): Promise<Set<string>> {
 	}
 }
 
+/**
+ * Compute fresh tokens from a Codex usage block: input minus cached input, plus output.
+ * Matches the Claude definition (cache reads excluded).
+ *
+ * @returns a non-negative token count; 0 for a missing block.
+ * Called by: loadCodex.
+ * Calls: nothing.
+ */
 const fresh = (u: any): number =>
 	Math.max(0, (u?.input_tokens ?? 0) - (u?.cached_input_tokens ?? 0)) + (u?.output_tokens ?? 0);
 
+/**
+ * Aggregate every Codex rollout under `~/.codex/sessions` and `~/.codex/archived_sessions`
+ * into `days`: prompts (`task_started` turns outside sub-agent threads), per-project prompt
+ * counts, distinct session ids, and fresh tokens. Imported threads are skipped. Tokens come
+ * from `token_usage_record` (newer rollouts, deduplicated by response id) or, in older
+ * rollouts, from `token_count` events, skipping repeats of the same running total.
+ *
+ * @returns the number of rollout files scanned (imported ones included); mutates `days`.
+ * Called by: cli.
+ * Calls: importedThreadIds, readJsonl, keyOfTimestamp, day, bumpProject, fresh.
+ */
 export async function loadCodex(days: Days, since: string): Promise<number> {
 	const imported = await importedThreadIds();
 	let files = 0;
@@ -30,8 +57,6 @@ export async function loadCodex(days: Days, since: string): Promise<number> {
 			const records: any[] = [];
 			for await (const r of readJsonl(join(root, rel))) records.push(r);
 
-			// Newer rollouts log one token_usage_record per response; older ones only
-			// emit token_count events, which can repeat the same totals.
 			const hasUsageRecords = records.some((r) => r.type === 'token_usage_record');
 			const seenResponses = new Set<string>();
 			let lastTotal = -1;

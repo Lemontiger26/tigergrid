@@ -12,32 +12,65 @@ export const METRIC_LABEL: Record<Metric, string> = {
 	ai: 'AI-assisted commits'
 };
 
-/** Dark and light ramps for levels 0..4 (0 = no activity). */
+/**
+ * Surface colours for the two themes. Light follows a clean admin UI (white card on a cool
+ * grey page, slate text); dark follows a near-black fintech dashboard (black canvas, charcoal
+ * cards, soft grey-green muted text).
+ */
+export const THEME = {
+	light: { bg: '#ffffff', border: '#e3e7eb', fg: '#1b2733', muted: '#6b7785' },
+	dark: { bg: '#0b0c0c', border: '#1f2422', fg: '#f3f6f4', muted: '#8b938f' }
+} as const;
+
+/**
+ * Level ramps 0..4 (0 = no activity) per metric. Light ramps run from a pastel tag fill to
+ * its saturated tag text colour; dark ramps run from a dim tint to a neon accent.
+ */
 export const PALETTES: Record<Metric, { dark: string[]; light: string[] }> = {
 	prompts: {
-		dark: ['#21262d', '#0e4429', '#006d32', '#26a641', '#39d353'],
-		light: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39']
+		// lime: the neon accent of the dark sample, the OUEST tag of the light one
+		dark: ['#222725', '#2a3a16', '#4f7a13', '#8fd12a', '#c4f54a'],
+		light: ['#eef1f4', '#e6f8c2', '#c2e870', '#8cc51e', '#5f8d0b']
 	},
 	sessions: {
-		dark: ['#21262d', '#0c2d6b', '#1158c7', '#388bfd', '#79c0ff'],
-		light: ['#ebedf0', '#b6d4fe', '#6ea8fe', '#2f6fdb', '#0b4aa8']
+		// blue: the export button / heatmap blues
+		dark: ['#222725', '#1a2550', '#26408f', '#3667e6', '#7fa3ff'],
+		light: ['#eef1f4', '#dfeaff', '#a9c6ff', '#4f82f2', '#1f5fe0']
 	},
 	tokens: {
-		dark: ['#21262d', '#5a2a00', '#9e4c00', '#e07b00', '#ffb340'],
-		light: ['#ebedf0', '#ffd8a8', '#ffa94d', '#f76707', '#c2410c']
+		// violet: the CENTRE OUEST tag / the Stocks card
+		dark: ['#222725', '#2a1d4d', '#4a2f8f', '#8b5cf6', '#c3a2ff'],
+		light: ['#eef1f4', '#ece2ff', '#cfb5ff', '#9a64f5', '#6d32d9']
 	},
 	commits: {
-		dark: ['#21262d', '#3b2e00', '#7a5d00', '#c9a400', '#f5d90a'],
-		light: ['#ebedf0', '#fff3a3', '#ffe14d', '#e6b800', '#a37f00']
+		// mint: the NORD tag / the green cashflow band
+		dark: ['#222725', '#12322b', '#17604f', '#1fb08f', '#5ee9c5'],
+		light: ['#eef1f4', '#d5f5ec', '#94e3cf', '#2fb79a', '#0f7f6d']
 	},
 	ai: {
-		dark: ['#21262d', '#3c1e70', '#6e40c9', '#a371f7', '#d2a8ff'],
-		light: ['#ebedf0', '#e2d1ff', '#c297ff', '#8957e5', '#5a32a3']
+		// rose: the CENTRE-EST tag
+		dark: ['#222725', '#3d1626', '#702447', '#d63d7c', '#ff8db8'],
+		light: ['#eef1f4', '#fde2eb', '#f7afc6', '#e65588', '#b8245a']
 	}
 };
 
+/**
+ * Expand a tool filter to the concrete tools it covers.
+ *
+ * @returns `["claude", "codex"]` for "all", otherwise a single-element list.
+ * Called by: value.
+ * Calls: nothing.
+ */
 const tools = (t: ToolFilter): Tool[] => (t === 'all' ? ['claude', 'codex'] : [t]);
 
+/**
+ * Read one metric off a day's aggregate. Agent metrics are summed over the selected tools;
+ * git metrics ignore the tool filter.
+ *
+ * @returns the metric value for that day, 0 for a day with no data.
+ * Called by: buildGrid.
+ * Calls: tools.
+ */
 export function value(d: Day | undefined, metric: Metric, tool: ToolFilter): number {
 	if (!d) return 0;
 	switch (metric) {
@@ -68,13 +101,37 @@ export interface Grid {
 	end: string;
 }
 
+/**
+ * Shift a date by whole calendar days at local midnight (safe across DST changes).
+ *
+ * @returns a new Date `n` days after `d` (before it for negative `n`).
+ * Called by: gridStart, buildGrid.
+ * Calls: nothing.
+ */
 const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 
+/**
+ * Find the Monday that starts a grid of `weeks` columns ending with the current week.
+ * The CLI also uses it as the lower bound for what the sources load.
+ *
+ * @returns the first (top-left) date of the grid.
+ * Called by: buildGrid, cli.
+ * Calls: addDays.
+ */
 export function gridStart(weeks: number, today = new Date()): Date {
 	const mondayOffset = (today.getDay() + 6) % 7;
 	return addDays(today, -mondayOffset - (weeks - 1) * 7);
 }
 
+/**
+ * Lay the aggregated days out as week columns (Mon..Sun), read the chosen metric for each
+ * cell, and assign colour levels GitHub-style: quartiles over the active days in view, so
+ * levels are relative to your own activity. Days after today are marked `future`.
+ *
+ * @returns the grid with per-cell values and levels, plus its start/end day keys.
+ * Called by: cli.
+ * Calls: gridStart, addDays, dayKey, value.
+ */
 export function buildGrid(days: Days, metric: Metric, tool: ToolFilter, weeks: number, today = new Date()): Grid {
 	const start = gridStart(weeks, today);
 	const todayKey = dayKey(today);
@@ -89,7 +146,6 @@ export function buildGrid(days: Days, metric: Metric, tool: ToolFilter, weeks: n
 		cols.push(col);
 	}
 
-	// GitHub-style quartiles over the active days in view.
 	const active = cols
 		.flat()
 		.map((c) => c.value)
@@ -112,6 +168,14 @@ export interface Summary {
 	busiest: Cell | null;
 }
 
+/**
+ * Compute headline stats for a grid: total, active days, current and longest streak, and
+ * the busiest day. A quiet *today* does not break the current streak, since the day isn't over.
+ *
+ * @returns a Summary over the non-future cells.
+ * Called by: cli (terminal summary and SVG subtitle).
+ * Calls: nothing.
+ */
 export function summarize(grid: Grid): Summary {
 	const cells = grid.weeks.flat().filter((c) => !c.future);
 	let longest = 0;
@@ -120,7 +184,6 @@ export function summarize(grid: Grid): Summary {
 		run = c.value > 0 ? run + 1 : 0;
 		longest = Math.max(longest, run);
 	}
-	// A quiet today doesn't break the streak yet.
 	let current = 0;
 	for (let i = cells.length - 1; i >= 0; i--) {
 		if (cells[i]!.value > 0) current++;
@@ -138,6 +201,13 @@ export function summarize(grid: Grid): Summary {
 	};
 }
 
+/**
+ * Format a count compactly for display: `1,172`, `25.0k`, `115.2M`, `1.3B`.
+ *
+ * @returns the formatted number.
+ * Called by: cli, render/svg.renderSvg.
+ * Calls: nothing.
+ */
 export const fmt = (n: number): string =>
 	n >= 1e9
 		? `${(n / 1e9).toFixed(1)}B`
@@ -149,7 +219,14 @@ export const fmt = (n: number): string =>
 
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** Column index → month label, placed on the first week whose Monday is in a new month. */
+/**
+ * Work out where month labels go above the grid: on each column whose Monday falls in a
+ * different month than the previous column's.
+ *
+ * @returns a map of column index → short month name, in column order.
+ * Called by: render/terminal.renderGrid, render/svg.renderSvg.
+ * Calls: nothing.
+ */
 export function monthLabels(grid: Grid): Map<number, string> {
 	const labels = new Map<number, string>();
 	let last = -1;

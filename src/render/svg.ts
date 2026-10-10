@@ -1,57 +1,98 @@
-import { fmt, METRIC_LABEL, monthLabels, PALETTES, type Grid, type Metric, type Summary } from '../grid';
+import { fmt, METRIC_LABEL, monthLabels, PALETTES, THEME, type Grid, type Metric, type Summary } from '../grid';
 
 const SIZE = 11;
 const GAP = 3;
 const STEP = SIZE + GAP;
-const LEFT = 32;
-const TOP = 56;
+const PAD = 20;
+const LEFT = PAD + 30;
+const TOP = 80;
 
+/**
+ * Escape the characters that would break SVG text or attribute content.
+ *
+ * @returns the input with `& < > "` replaced by numeric entities.
+ * Called by: renderSvg.
+ * Calls: nothing.
+ */
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
-/** Self-contained SVG that follows the viewer's light/dark preference. */
+/**
+ * Turn a level ramp into CSS custom properties `--l0` … `--l4`, so one set of cell classes
+ * can be recoloured per theme.
+ *
+ * @returns a CSS declaration list.
+ * Called by: renderSvg.
+ * Calls: nothing.
+ */
+const levelVars = (ramp: string[]) => ramp.map((c, i) => `--l${i}:${c};`).join('');
+
+/**
+ * Turn a THEME entry into the CSS custom properties for card background, border and text.
+ *
+ * @returns a CSS declaration list (`--bg`, `--border`, `--fg`, `--muted`).
+ * Called by: renderSvg.
+ * Calls: nothing.
+ */
+const surfaceVars = (t: (typeof THEME)[keyof typeof THEME]) =>
+	`--bg:${t.bg};--border:${t.border};--fg:${t.fg};--muted:${t.muted};`;
+
+/**
+ * Render the grid as a self-contained, embeddable SVG card: title, summary line, month and
+ * weekday labels, one rounded cell per day with a hover `<title>` tooltip, and a legend.
+ * Colours come from PALETTES/THEME through CSS variables, and a `prefers-color-scheme`
+ * media query switches between the light and dark ramps, so the same file suits light and
+ * dark READMEs.
+ *
+ * @returns the SVG document as a string (no external assets or fonts).
+ * Called by: cli (`--svg`).
+ * Calls: monthLabels, fmt, esc, levelVars, surfaceVars.
+ */
 export function renderSvg(grid: Grid, metric: Metric, summary: Summary, title: string): string {
 	const { dark, light } = PALETTES[metric];
-	const width = LEFT + grid.weeks.length * STEP + 24;
-	const height = TOP + 7 * STEP + 34;
+	const width = LEFT + grid.weeks.length * STEP + PAD + 10;
+	const height = TOP + 7 * STEP + 44;
 
-	const levelVars = (p: string[]) => p.map((c, i) => `--l${i}:${c};`).join('');
 	const style = `
-    svg{${levelVars(light)}--fg:#1f2328;--muted:#656d76;--bg:#ffffff}
-    @media (prefers-color-scheme:dark){svg{${levelVars(dark)}--fg:#e6edf3;--muted:#7d8590;--bg:#0d1117}}
-    text{font:10px -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;fill:var(--muted)}
-    .t{font-size:13px;font-weight:600;fill:var(--fg)}
+    svg{${levelVars(light)}${surfaceVars(THEME.light)}}
+    @media (prefers-color-scheme:dark){svg{${levelVars(dark)}${surfaceVars(THEME.dark)}}}
+    text{font:500 10px Inter,'General Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;fill:var(--muted)}
+    .t{font-size:16px;font-weight:700;fill:var(--fg);letter-spacing:-.01em}
+    .s{font-size:11px}
+    .v{font-weight:600;fill:var(--fg)}
     ${[0, 1, 2, 3, 4].map((i) => `.l${i}{fill:var(--l${i})}`).join('')}`;
 
 	const parts: string[] = [];
-	parts.push(`<rect width="100%" height="100%" rx="6" fill="var(--bg)"/>`);
-	parts.push(`<text class="t" x="${LEFT}" y="18">${esc(title)}</text>`);
 	parts.push(
-		`<text x="${LEFT}" y="32">${fmt(summary.total)} ${esc(METRIC_LABEL[metric])} · ${summary.activeDays} active days · longest streak ${summary.longestStreak}d</text>`
+		`<rect x=".5" y=".5" width="${width - 1}" height="${height - 1}" rx="14" fill="var(--bg)" stroke="var(--border)"/>`
+	);
+	parts.push(`<text class="t" x="${PAD}" y="${PAD + 16}">${esc(title)}</text>`);
+	parts.push(
+		`<text class="s" x="${PAD}" y="${PAD + 34}"><tspan class="v">${fmt(summary.total)}</tspan> ${esc(METRIC_LABEL[metric])} · <tspan class="v">${summary.activeDays}</tspan> active days · longest streak <tspan class="v">${summary.longestStreak}d</tspan></text>`
 	);
 
 	const labels = [...monthLabels(grid)];
 	labels.forEach(([col, name], i) => {
 		if ((labels[i + 1]?.[0] ?? Infinity) - col < 3) return;
-		parts.push(`<text x="${LEFT + col * STEP}" y="${TOP - 4}">${name}</text>`);
+		parts.push(`<text x="${LEFT + col * STEP}" y="${TOP - 6}">${name}</text>`);
 	});
-	['Mon', 'Wed', 'Fri'].forEach((d, i) => parts.push(`<text x="2" y="${TOP + i * 2 * STEP + 9}">${d}</text>`));
+	['Mon', 'Wed', 'Fri'].forEach((d, i) => parts.push(`<text x="${PAD}" y="${TOP + i * 2 * STEP + 9}">${d}</text>`));
 
 	grid.weeks.forEach((col, x) =>
 		col.forEach((c, y) => {
 			if (c.future) return;
 			parts.push(
-				`<rect class="l${c.level}" x="${LEFT + x * STEP}" y="${TOP + y * STEP}" width="${SIZE}" height="${SIZE}" rx="2"><title>${c.key}: ${fmt(c.value)} ${esc(METRIC_LABEL[metric])}</title></rect>`
+				`<rect class="l${c.level}" x="${LEFT + x * STEP}" y="${TOP + y * STEP}" width="${SIZE}" height="${SIZE}" rx="3"><title>${c.key}: ${fmt(c.value)} ${esc(METRIC_LABEL[metric])}</title></rect>`
 			);
 		})
 	);
 
-	const legendX = width - 12 - 5 * STEP - 30;
-	const legendY = TOP + 7 * STEP + 10;
+	const legendX = width - PAD - 5 * STEP - 26;
+	const legendY = TOP + 7 * STEP + 12;
 	parts.push(`<text x="${legendX - 28}" y="${legendY + 9}">Less</text>`);
 	[0, 1, 2, 3, 4].forEach((l) =>
-		parts.push(`<rect class="l${l}" x="${legendX + l * STEP}" y="${legendY}" width="${SIZE}" height="${SIZE}" rx="2"/>`)
+		parts.push(`<rect class="l${l}" x="${legendX + l * STEP}" y="${legendY}" width="${SIZE}" height="${SIZE}" rx="3"/>`)
 	);
-	parts.push(`<text x="${legendX + 5 * STEP + 2}" y="${legendY + 9}">More</text>`);
+	parts.push(`<text x="${legendX + 5 * STEP + 3}" y="${legendY + 9}">More</text>`);
 
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><style>${style}</style>${parts.join('')}</svg>\n`;
 }
