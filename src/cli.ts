@@ -30,12 +30,14 @@ Usage: tigergrid [options]
   -w, --weeks <n>       weeks to show (default: fit terminal, max 53)
   -r, --git-root <dir>  where to look for git repos, repeatable      (default: ~/develop)
   -a, --author <pat>    git author filter, repeatable                (default: git config user.email)
+      --claude-dir <d>  Claude Code projects dir                     (default: ~/.claude/projects)
+      --codex-dir <d>   Codex home dir                               (default: ~/.codex)
       --no-git          skip the git scan
       --svg <file>      also write an embeddable SVG
       --json            print per-day data as JSON instead of the graph
   -h, --help
 
-Sources: ~/.claude/projects, ~/.codex/sessions, and git repos under --git-root.
+Sources: Claude Code transcripts, Codex rollouts, and git repos under --git-root.
 "tokens" counts fresh tokens (uncached input + cache writes + output); cache reads are excluded.
 "ai" counts commits carrying an agent Co-Authored-By trailer or a "Generated with" footer.`;
 
@@ -46,6 +48,8 @@ const { values: args } = parseArgs({
 		weeks: { type: 'string', short: 'w' },
 		'git-root': { type: 'string', short: 'r', multiple: true },
 		author: { type: 'string', short: 'a', multiple: true },
+		'claude-dir': { type: 'string' },
+		'codex-dir': { type: 'string' },
 		'no-git': { type: 'boolean', default: false },
 		svg: { type: 'string' },
 		json: { type: 'boolean', default: false },
@@ -173,8 +177,8 @@ async function main() {
 
 	const started = performance.now();
 	const [claudeFiles, codexFiles, repos] = await Promise.all([
-		loadClaude(days, since),
-		loadCodex(days, since),
+		loadClaude(days, since, args['claude-dir'] ? resolve(args['claude-dir']) : undefined),
+		loadCodex(days, since, args['codex-dir'] ? resolve(args['codex-dir']) : undefined),
 		withGit
 			? gitAuthors().then((authors) =>
 					loadGit(

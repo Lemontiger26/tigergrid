@@ -51,7 +51,7 @@ async function git(repo: string, args: string[]): Promise<string> {
  * `since`, and deduplicated by hash because worktrees and clones share history.
  *
  * @returns the number of repositories scanned; mutates `days` (commits, aiCommits).
- * Called by: cli.
+ * Called by: cli, tests.
  * Calls: findRepos, git, keyOfTimestamp, day.
  */
 export async function loadGit(days: Days, since: string, roots: string[], authors: string[]): Promise<number> {

@@ -1,0 +1,2 @@
+{"type":"user","timestamp":"2026-09-09T14:00:02Z","sessionId":"claude-web-1","cwd":"/Users/dev/acme/web","isSidechain":true,"message":{"role":"user","content":"NOT A PROMPT: task handed to a sub-agent"}}
+{"type":"assistant","timestamp":"2026-09-09T14:00:08Z","sessionId":"claude-web-1","cwd":"/Users/dev/acme/web","isSidechain":true,"message":{"id":"msg_W2","role":"assistant","content":[{"type":"text","text":"Found navbar.svelte"}],"usage":{"input_tokens":0,"cache_creation_input_tokens":300,"cache_read_input_tokens":0,"output_tokens":200}}}

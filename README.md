@@ -25,11 +25,20 @@ SVGs follow the viewer's `prefers-color-scheme`. Each metric has its own colour:
 
 | Source | Location | Notes |
 | --- | --- | --- |
-| Claude Code | `~/.claude/projects/**/*.jsonl` | Prompts = human user turns (no tool results, slash-command echoes, meta or sidechain messages). Usage is deduplicated by message id because one response spans several lines. |
-| Codex | `~/.codex/sessions`, `~/.codex/archived_sessions` | Prompts = `task_started` turns outside sub-agent threads. Threads listed in `external_agent_session_imports.json` are skipped: they are copies of Claude Code sessions, already counted at the source. |
+| Claude Code | `~/.claude/projects/**/*.jsonl` (`--claude-dir`) | Prompts = human user turns (no tool results, slash-command echoes, meta or sidechain messages). Usage is deduplicated by message id because one response spans several lines. |
+| Codex | `~/.codex/sessions`, `~/.codex/archived_sessions` (`--codex-dir` sets the `~/.codex` part) | Prompts = `task_started` turns outside sub-agent threads. Threads listed in `external_agent_session_imports.json` are skipped: they are copies of Claude Code sessions, already counted at the source. |
 | git | repos under `--git-root` (default `~/develop`, depth 4) | Filtered by `--author` (default `git config user.email`), deduplicated by hash across worktrees. "AI-assisted" = an agent `Co-Authored-By` trailer or a `Generated with …` footer. |
 
 `tokens` means fresh tokens: uncached input + cache writes + output. Cache reads are excluded because they would swamp everything else.
+
+## Tests
+
+```sh
+bun test         # unit tests per module + end-to-end CLI runs against the fixtures
+bun run check    # typecheck src/ and test/
+```
+
+The fixtures in [`test/fixtures/`](test/fixtures/README.md) are a small fictional week of activity, with every expected number written down so you can check the tests against them.
 
 ## Known limits
 

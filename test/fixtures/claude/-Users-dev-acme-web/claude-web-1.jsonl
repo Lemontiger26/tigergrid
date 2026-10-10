@@ -1,0 +1,2 @@
+{"type":"user","timestamp":"2026-09-09T14:00:00Z","sessionId":"claude-web-1","cwd":"/Users/dev/acme/web","origin":{"kind":"human"},"message":{"role":"user","content":"PROMPT 4: Fix the navbar"}}
+{"type":"assistant","timestamp":"2026-09-09T14:00:10Z","sessionId":"claude-web-1","cwd":"/Users/dev/acme/web","message":{"id":"msg_W1","role":"assistant","content":[{"type":"text","text":"Fixed."}],"usage":{"input_tokens":20,"cache_creation_input_tokens":80,"cache_read_input_tokens":4000,"output_tokens":100}}}

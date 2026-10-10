@@ -4,8 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { bumpProject, day, keyOfTimestamp, readJsonl, type Days } from '../days';
 
-const CODEX = join(homedir(), '.codex');
-const ROOTS = ['sessions', 'archived_sessions'].map((d) => join(CODEX, d));
+export const CODEX_HOME = join(homedir(), '.codex');
 
 /**
  * Read Codex's import ledger, which lists threads Codex copied from other agents
@@ -16,9 +15,9 @@ const ROOTS = ['sessions', 'archived_sessions'].map((d) => join(CODEX, d));
  * Called by: loadCodex.
  * Calls: Bun.file().json.
  */
-async function importedThreadIds(): Promise<Set<string>> {
+async function importedThreadIds(home: string): Promise<Set<string>> {
 	try {
-		const ledger = await Bun.file(join(CODEX, 'external_agent_session_imports.json')).json();
+		const ledger = await Bun.file(join(home, 'external_agent_session_imports.json')).json();
 		return new Set((ledger.records ?? []).map((r: any) => r.imported_thread_id).filter(Boolean));
 	} catch {
 		return new Set();
@@ -30,27 +29,27 @@ async function importedThreadIds(): Promise<Set<string>> {
  * Matches the Claude definition (cache reads excluded).
  *
  * @returns a non-negative token count; 0 for a missing block.
- * Called by: loadCodex.
+ * Called by: loadCodex, tests.
  * Calls: nothing.
  */
-const fresh = (u: any): number =>
+export const fresh = (u: any): number =>
 	Math.max(0, (u?.input_tokens ?? 0) - (u?.cached_input_tokens ?? 0)) + (u?.output_tokens ?? 0);
 
 /**
- * Aggregate every Codex rollout under `~/.codex/sessions` and `~/.codex/archived_sessions`
+ * Aggregate every Codex rollout under `<home>/sessions` and `<home>/archived_sessions` (home defaults to `~/.codex`)
  * into `days`: prompts (`task_started` turns outside sub-agent threads), per-project prompt
  * counts, distinct session ids, and fresh tokens. Imported threads are skipped. Tokens come
  * from `token_usage_record` (newer rollouts, deduplicated by response id) or, in older
  * rollouts, from `token_count` events, skipping repeats of the same running total.
  *
  * @returns the number of rollout files scanned (imported ones included); mutates `days`.
- * Called by: cli.
+ * Called by: cli, tests.
  * Calls: importedThreadIds, readJsonl, keyOfTimestamp, day, bumpProject, fresh.
  */
-export async function loadCodex(days: Days, since: string): Promise<number> {
-	const imported = await importedThreadIds();
+export async function loadCodex(days: Days, since: string, home = CODEX_HOME): Promise<number> {
+	const imported = await importedThreadIds(home);
 	let files = 0;
-	for (const root of ROOTS) {
+	for (const root of ['sessions', 'archived_sessions'].map((d) => join(home, d))) {
 		if (!existsSync(root)) continue;
 		for await (const rel of new Glob('**/*.jsonl').scan({ cwd: root, onlyFiles: true })) {
 			files++;

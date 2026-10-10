@@ -1,0 +1,5 @@
+{"type":"session_meta","timestamp":"2026-09-12T08:00:00Z","payload":{"id":"codex-legacy-1","cwd":"/Users/dev/acme/web","source":"vscode"}}
+{"type":"event_msg","timestamp":"2026-09-12T08:00:01Z","payload":{"type":"task_started","turn_id":"legacy-turn-1"}}
+{"type":"event_msg","timestamp":"2026-09-12T08:00:05Z","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":1000},"last_token_usage":{"input_tokens":1000,"cached_input_tokens":400,"output_tokens":100}}}}
+{"type":"event_msg","timestamp":"2026-09-12T08:00:06Z","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":1000},"last_token_usage":{"input_tokens":1000,"cached_input_tokens":400,"output_tokens":100}}}}
+{"type":"event_msg","timestamp":"2026-09-12T08:00:09Z","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":1500},"last_token_usage":{"input_tokens":450,"cached_input_tokens":0,"output_tokens":50}}}}

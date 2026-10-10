@@ -1,0 +1,44 @@
+{
+	"$comment": "Built into real git repos in a temp dir by test/helpers/git-fixture.ts. Paths are relative to the scan root. The test author is dev@acme.test.",
+	"repos": {
+		"acme/api": [
+			{ "date": "2026-08-01T10:00:00Z", "author": "dev@acme.test", "message": "Old commit, before the window" },
+			{
+				"date": "2026-09-08T11:00:00Z",
+				"author": "dev@acme.test",
+				"message": "Add pagination\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+			},
+			{ "date": "2026-09-08T15:00:00Z", "author": "dev@acme.test", "message": "Fix typo in README" },
+			{
+				"date": "2026-09-09T10:00:00Z",
+				"author": "colleague@acme.test",
+				"message": "Someone else's commit, filtered out by --author"
+			}
+		],
+		"acme/web": [
+			{
+				"date": "2026-09-09T12:00:00Z",
+				"author": "dev@acme.test",
+				"message": "Fix navbar\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+			},
+			{
+				"date": "2026-09-12T09:00:00Z",
+				"author": "dev@acme.test",
+				"message": "Restyle footer\n\nCo-authored-by: Codex <codex@openai.com>"
+			}
+		],
+		"node_modules/left-pad": [
+			{ "date": "2026-09-10T10:00:00Z", "author": "dev@acme.test", "message": "Inside node_modules, never scanned" }
+		],
+		"deep/a/b/c/too-deep": [
+			{
+				"date": "2026-09-10T10:00:00Z",
+				"author": "dev@acme.test",
+				"message": "Five levels down, past the depth limit of 4"
+			}
+		]
+	},
+	"clones": {
+		"forks/api-clone": "acme/api"
+	}
+}

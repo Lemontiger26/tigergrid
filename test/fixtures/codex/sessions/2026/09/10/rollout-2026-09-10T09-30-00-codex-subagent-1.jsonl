@@ -1,0 +1,4 @@
+{"type":"session_meta","timestamp":"2026-09-10T09:30:00Z","payload":{"id":"codex-subagent-1","cwd":"/Users/dev/acme/api","source":{"subagent":{"thread_spawn":{"parent_thread_id":"codex-native-1"}}},"thread_source":"subagent"}}
+{"type":"session_meta","timestamp":"2026-09-10T09:30:00Z","payload":{"id":"codex-native-1","cwd":"/Users/dev/acme/api","source":"vscode","thread_source":"user"}}
+{"type":"event_msg","timestamp":"2026-09-10T09:30:01Z","payload":{"type":"task_started","turn_id":"sub-turn-1"}}
+{"type":"token_usage_record","timestamp":"2026-09-10T09:30:05Z","payload":{"response_id":"r9","usage":{"input_tokens":300,"cached_input_tokens":0,"output_tokens":0}}}
