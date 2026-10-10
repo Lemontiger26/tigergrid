@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
-import type { Days } from '../src/days';
+import type { Days } from '../types/days';
 import { isHumanPrompt, loadClaude } from '../src/sources/claude';
 
 const ROOT = 'test/fixtures/claude';
@@ -52,9 +52,9 @@ describe('loadClaude on the fixtures', () => {
 	});
 
 	test("2026-09-09: sub-agent tokens count, sub-agent prompts don't", () => {
-		const d = days.get('2026-09-09')!;
-		expect(d.prompts.claude).toBe(2); // "Ship it" + "Fix the navbar"
-		expect(d.tokens.claude).toBe(50 + 200 + 500); // msg_A3 + msg_W1 + sub-agent msg_W2
+		const aggregate = days.get('2026-09-09')!;
+		expect(aggregate.prompts.claude).toBe(2); // "Ship it" + "Fix the navbar"
+		expect(aggregate.tokens.claude).toBe(50 + 200 + 500); // msg_A3 + msg_W1 + sub-agent msg_W2
 	});
 
 	test('tracks distinct sessions per day', () => {
@@ -68,9 +68,9 @@ describe('loadClaude on the fixtures', () => {
 	});
 
 	test('leaves Codex and git counters alone', () => {
-		for (const d of days.values()) {
-			expect(d.prompts.codex).toBe(0);
-			expect(d.commits).toBe(0);
+		for (const aggregate of days.values()) {
+			expect(aggregate.prompts.codex).toBe(0);
+			expect(aggregate.commits).toBe(0);
 		}
 	});
 });

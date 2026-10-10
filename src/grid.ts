@@ -1,8 +1,8 @@
-import { dayKey, type Day, type Days, type Tool } from './days';
+import type { Day, Days, Tool } from '../types/days';
+import type { Cell, Grid, Metric, Palette, Summary, Theme, ToolFilter } from '../types/grid';
+import { dayKey } from './days';
 
 export const METRICS = ['prompts', 'sessions', 'tokens', 'commits', 'ai'] as const;
-export type Metric = (typeof METRICS)[number];
-export type ToolFilter = Tool | 'all';
 
 export const METRIC_LABEL: Record<Metric, string> = {
 	prompts: 'prompts',
@@ -17,16 +17,16 @@ export const METRIC_LABEL: Record<Metric, string> = {
  * grey page, slate text); dark follows a near-black fintech dashboard (black canvas, charcoal
  * cards, soft grey-green muted text).
  */
-export const THEME = {
+export const THEME: Record<'light' | 'dark', Theme> = {
 	light: { bg: '#ffffff', border: '#e3e7eb', fg: '#1b2733', muted: '#6b7785' },
 	dark: { bg: '#0b0c0c', border: '#1f2422', fg: '#f3f6f4', muted: '#8b938f' }
-} as const;
+};
 
 /**
  * Level ramps 0..4 (0 = no activity) per metric. Light ramps run from a pastel tag fill to
  * its saturated tag text colour; dark ramps run from a dim tint to a neon accent.
  */
-export const PALETTES: Record<Metric, { dark: string[]; light: string[] }> = {
+export const PALETTES: Record<Metric, Palette> = {
 	prompts: {
 		// lime: the neon accent of the dark sample, the OUEST tag of the light one
 		dark: ['#222725', '#2a3a16', '#4f7a13', '#8fd12a', '#c4f54a'],
@@ -55,13 +55,32 @@ export const PALETTES: Record<Metric, { dark: string[]; light: string[] }> = {
 };
 
 /**
+ * Check that a CLI string names a metric.
+ *
+ * @returns true (narrowing the type) when `value` is one of METRICS.
+ * Called by: cli.
+ * Calls: nothing.
+ */
+export const isMetric = (value: string): value is Metric => METRICS.some((metric) => metric === value);
+
+/**
+ * Check that a CLI string names a tool filter.
+ *
+ * @returns true (narrowing the type) for "claude", "codex" or "all".
+ * Called by: cli.
+ * Calls: nothing.
+ */
+export const isToolFilter = (value: string): value is ToolFilter =>
+	value === 'claude' || value === 'codex' || value === 'all';
+
+/**
  * Expand a tool filter to the concrete tools it covers.
  *
  * @returns `["claude", "codex"]` for "all", otherwise a single-element list.
  * Called by: value.
  * Calls: nothing.
  */
-const tools = (t: ToolFilter): Tool[] => (t === 'all' ? ['claude', 'codex'] : [t]);
+const tools = (filter: ToolFilter): Tool[] => (filter === 'all' ? ['claude', 'codex'] : [filter]);
 
 /**
  * Read one metric off a day's aggregate. Agent metrics are summed over the selected tools;
@@ -71,44 +90,30 @@ const tools = (t: ToolFilter): Tool[] => (t === 'all' ? ['claude', 'codex'] : [t
  * Called by: buildGrid.
  * Calls: tools.
  */
-export function value(d: Day | undefined, metric: Metric, tool: ToolFilter): number {
-	if (!d) return 0;
+export function value(aggregate: Day | undefined, metric: Metric, filter: ToolFilter): number {
+	if (!aggregate) return 0;
 	switch (metric) {
 		case 'prompts':
-			return tools(tool).reduce((n, t) => n + d.prompts[t], 0);
+			return tools(filter).reduce((sum, tool) => sum + aggregate.prompts[tool], 0);
 		case 'sessions':
-			return tools(tool).reduce((n, t) => n + d.sessions[t].size, 0);
+			return tools(filter).reduce((sum, tool) => sum + aggregate.sessions[tool].size, 0);
 		case 'tokens':
-			return tools(tool).reduce((n, t) => n + d.tokens[t], 0);
+			return tools(filter).reduce((sum, tool) => sum + aggregate.tokens[tool], 0);
 		case 'commits':
-			return d.commits;
+			return aggregate.commits;
 		case 'ai':
-			return d.aiCommits;
+			return aggregate.aiCommits;
 	}
-}
-
-export interface Cell {
-	key: string;
-	date: Date;
-	value: number;
-	level: number;
-	future: boolean;
-}
-
-export interface Grid {
-	weeks: Cell[][]; // columns, Monday..Sunday
-	start: string;
-	end: string;
 }
 
 /**
  * Shift a date by whole calendar days at local midnight (safe across DST changes).
  *
- * @returns a new Date `n` days after `d` (before it for negative `n`).
+ * @returns a new Date `count` days after `date` (before it for a negative count).
  * Called by: gridStart, buildGrid.
  * Calls: nothing.
  */
-const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const addDays = (date: Date, count: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + count);
 
 /**
  * Find the Monday that starts a grid of `weeks` columns ending with the current week.
@@ -124,48 +129,52 @@ export function gridStart(weeks: number, today = new Date()): Date {
 }
 
 /**
+ * Map a cell value to its colour level, given the quartile thresholds of the active days.
+ *
+ * @returns 0 for no activity, otherwise 1..4.
+ * Called by: buildGrid.
+ * Calls: nothing.
+ */
+function levelOf(cellValue: number, [q1, q2, q3]: [number, number, number]): number {
+	if (cellValue <= 0) return 0;
+	if (cellValue <= q1) return 1;
+	if (cellValue <= q2) return 2;
+	if (cellValue <= q3) return 3;
+	return 4;
+}
+
+/**
  * Lay the aggregated days out as week columns (Mon..Sun), read the chosen metric for each
  * cell, and assign colour levels GitHub-style: quartiles over the active days in view, so
  * levels are relative to your own activity. Days after today are marked `future`.
  *
  * @returns the grid with per-cell values and levels, plus its start/end day keys.
  * Called by: cli.
- * Calls: gridStart, addDays, dayKey, value.
+ * Calls: gridStart, addDays, dayKey, value, levelOf.
  */
-export function buildGrid(days: Days, metric: Metric, tool: ToolFilter, weeks: number, today = new Date()): Grid {
+export function buildGrid(days: Days, metric: Metric, filter: ToolFilter, weeks: number, today = new Date()): Grid {
 	const start = gridStart(weeks, today);
 	const todayKey = dayKey(today);
-	const cols: Cell[][] = [];
-	for (let w = 0; w < weeks; w++) {
-		const col: Cell[] = [];
-		for (let i = 0; i < 7; i++) {
-			const date = addDays(start, w * 7 + i);
+	const columns: Cell[][] = [];
+	for (let week = 0; week < weeks; week++) {
+		const column: Cell[] = [];
+		for (let weekday = 0; weekday < 7; weekday++) {
+			const date = addDays(start, week * 7 + weekday);
 			const key = dayKey(date);
-			col.push({ key, date, value: value(days.get(key), metric, tool), level: 0, future: key > todayKey });
+			column.push({ key, date, value: value(days.get(key), metric, filter), level: 0, future: key > todayKey });
 		}
-		cols.push(col);
+		columns.push(column);
 	}
 
-	const active = cols
+	const active = columns
 		.flat()
-		.map((c) => c.value)
-		.filter((v) => v > 0)
-		.sort((a, b) => a - b);
-	const q = (p: number) => active[Math.min(active.length - 1, Math.floor(p * active.length))] ?? 0;
-	const [q1, q2, q3] = [q(0.25), q(0.5), q(0.75)];
-	for (const c of cols.flat()) {
-		c.level = c.value <= 0 ? 0 : c.value <= q1 ? 1 : c.value <= q2 ? 2 : c.value <= q3 ? 3 : 4;
-	}
-	return { weeks: cols, start: dayKey(start), end: todayKey };
-}
-
-export interface Summary {
-	total: number;
-	activeDays: number;
-	totalDays: number;
-	currentStreak: number;
-	longestStreak: number;
-	busiest: Cell | null;
+		.map((cell) => cell.value)
+		.filter((cellValue) => cellValue > 0)
+		.sort((left, right) => left - right);
+	const quantile = (fraction: number) => active[Math.min(active.length - 1, Math.floor(fraction * active.length))] ?? 0;
+	const thresholds: [number, number, number] = [quantile(0.25), quantile(0.5), quantile(0.75)];
+	for (const cell of columns.flat()) cell.level = levelOf(cell.value, thresholds);
+	return { weeks: columns, start: dayKey(start), end: todayKey };
 }
 
 /**
@@ -177,23 +186,23 @@ export interface Summary {
  * Calls: nothing.
  */
 export function summarize(grid: Grid): Summary {
-	const cells = grid.weeks.flat().filter((c) => !c.future);
+	const cells = grid.weeks.flat().filter((cell) => !cell.future);
 	let longest = 0;
 	let run = 0;
-	for (const c of cells) {
-		run = c.value > 0 ? run + 1 : 0;
+	for (const cell of cells) {
+		run = cell.value > 0 ? run + 1 : 0;
 		longest = Math.max(longest, run);
 	}
 	let current = 0;
-	for (let i = cells.length - 1; i >= 0; i--) {
-		if (cells[i]!.value > 0) current++;
-		else if (i === cells.length - 1) continue;
+	for (let index = cells.length - 1; index >= 0; index--) {
+		if (cells[index]!.value > 0) current++;
+		else if (index === cells.length - 1) continue;
 		else break;
 	}
-	const busiest = cells.reduce<Cell | null>((b, c) => (c.value > (b?.value ?? 0) ? c : b), null);
+	const busiest = cells.reduce<Cell | null>((best, cell) => (cell.value > (best?.value ?? 0) ? cell : best), null);
 	return {
-		total: cells.reduce((n, c) => n + c.value, 0),
-		activeDays: cells.filter((c) => c.value > 0).length,
+		total: cells.reduce((sum, cell) => sum + cell.value, 0),
+		activeDays: cells.filter((cell) => cell.value > 0).length,
 		totalDays: cells.length,
 		currentStreak: current,
 		longestStreak: longest,
@@ -208,14 +217,12 @@ export function summarize(grid: Grid): Summary {
  * Called by: cli, render/svg.renderSvg.
  * Calls: nothing.
  */
-export const fmt = (n: number): string =>
-	n >= 1e9
-		? `${(n / 1e9).toFixed(1)}B`
-		: n >= 1e6
-			? `${(n / 1e6).toFixed(1)}M`
-			: n >= 1e4
-				? `${(n / 1e3).toFixed(1)}k`
-				: n.toLocaleString('en-US');
+export function fmt(count: number): string {
+	if (count >= 1e9) return `${(count / 1e9).toFixed(1)}B`;
+	if (count >= 1e6) return `${(count / 1e6).toFixed(1)}M`;
+	if (count >= 1e4) return `${(count / 1e3).toFixed(1)}k`;
+	return count.toLocaleString('en-US');
+}
 
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -229,11 +236,11 @@ export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', '
  */
 export function monthLabels(grid: Grid): Map<number, string> {
 	const labels = new Map<number, string>();
-	let last = -1;
-	grid.weeks.forEach((col, i) => {
-		const m = col[0]!.date.getMonth();
-		if (m !== last) labels.set(i, MONTHS[m]!);
-		last = m;
+	let lastMonth = -1;
+	grid.weeks.forEach((column, index) => {
+		const month = column[0]!.date.getMonth();
+		if (month !== lastMonth) labels.set(index, MONTHS[month]!);
+		lastMonth = month;
 	});
 	return labels;
 }

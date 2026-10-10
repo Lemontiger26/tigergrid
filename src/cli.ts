@@ -2,19 +2,11 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { dayKey, type Day, type Days } from './days';
-import {
-	buildGrid,
-	fmt,
-	gridStart,
-	METRIC_LABEL,
-	METRICS,
-	summarize,
-	type Grid,
-	type Metric,
-	type Summary,
-	type ToolFilter
-} from './grid';
+import type { JsonDay } from '../types/cli';
+import type { Day, Days, Tool } from '../types/days';
+import type { Grid, Metric, Summary, ToolFilter } from '../types/grid';
+import { dayKey } from './days';
+import { buildGrid, fmt, gridStart, isMetric, isToolFilter, METRIC_LABEL, summarize } from './grid';
 import { renderSvg } from './render/svg';
 import { bold, dim, renderGrid } from './render/terminal';
 import { loadClaude } from './sources/claude';
@@ -41,6 +33,8 @@ Sources: Claude Code transcripts, Codex rollouts, and git repos under --git-root
 "tokens" counts fresh tokens (uncached input + cache writes + output); cache reads are excluded.
 "ai" counts commits carrying an agent Co-Authored-By trailer or a "Generated with" footer.`;
 
+const TOOL_LABEL: Record<ToolFilter, string> = { all: 'Claude Code + Codex', claude: 'Claude Code', codex: 'Codex' };
+
 const { values: args } = parseArgs({
 	options: {
 		metric: { type: 'string', short: 'm', default: 'prompts' },
@@ -61,13 +55,13 @@ const { values: args } = parseArgs({
  * Abort on invalid input: print the message and the usage text to stderr, exit with code 1.
  *
  * @returns never.
- * Called by: argument validation below.
+ * Called by: main (argument validation).
  * Calls: console.error, process.exit.
  */
-const die = (msg: string): never => {
-	console.error(`tigergrid: ${msg}\n\n${HELP}`);
+function die(message: string): never {
+	console.error(`tigergrid: ${message}\n\n${HELP}`);
 	process.exit(1);
-};
+}
 
 /**
  * Pick the git author filters: the `--author` flags if given, else the global
@@ -79,32 +73,40 @@ const die = (msg: string): never => {
  */
 async function gitAuthors(): Promise<string[]> {
 	if (args.author?.length) return args.author;
-	const p = Bun.spawn(['git', 'config', 'user.email'], { stdout: 'pipe' });
-	const email = (await new Response(p.stdout).text()).trim();
+	const proc = Bun.spawn(['git', 'config', 'user.email'], { stdout: 'pipe' });
+	const email = (await new Response(proc.stdout).text()).trim();
 	return email ? [email] : [];
 }
 
 /**
- * Print every loaded day as JSON, sorted by date, with Sets and Maps flattened to plain
- * counts and objects. This is the `--json` / `bun run json` output.
+ * Flatten one day's Sets and Maps into plain counts and objects for JSON output.
+ *
+ * @returns the `--json` row for that day.
+ * Called by: printJson.
+ * Calls: nothing.
+ */
+const toJsonDay = (date: string, aggregate: Day): JsonDay => ({
+	date,
+	sessions: { claude: aggregate.sessions.claude.size, codex: aggregate.sessions.codex.size },
+	prompts: aggregate.prompts,
+	tokens: aggregate.tokens,
+	commits: aggregate.commits,
+	aiCommits: aggregate.aiCommits,
+	projects: Object.fromEntries(aggregate.projects)
+});
+
+/**
+ * Print every loaded day as JSON, sorted by date. This is the `--json` / `bun run json` output.
  *
  * @returns nothing; writes to stdout.
  * Called by: main.
- * Calls: nothing.
+ * Calls: toJsonDay.
  */
 function printJson(days: Days) {
-	const out = [...days.entries()]
-		.sort(([a], [b]) => a.localeCompare(b))
-		.map(([date, d]) => ({
-			date,
-			sessions: { claude: d.sessions.claude.size, codex: d.sessions.codex.size },
-			prompts: d.prompts,
-			tokens: d.tokens,
-			commits: d.commits,
-			aiCommits: d.aiCommits,
-			projects: Object.fromEntries(d.projects)
-		}));
-	console.log(JSON.stringify(out, null, 2));
+	const rows = [...days.entries()]
+		.sort(([left], [right]) => left.localeCompare(right))
+		.map(([date, aggregate]) => toJsonDay(date, aggregate));
+	console.log(JSON.stringify(rows, null, 2));
 }
 
 /**
@@ -116,36 +118,41 @@ function printJson(days: Days) {
  * Called by: main.
  * Calls: fmt, dim; the local helpers row, sum and sessions.
  */
-function printSummary(days: Days, grid: Grid, s: Summary, tool: ToolFilter, withGit: boolean) {
-	const inView = [...days.entries()].filter(([k]) => k >= grid.start && k <= grid.end).map(([, d]) => d);
+function printSummary(days: Days, grid: Grid, summary: Summary, filter: ToolFilter, withGit: boolean) {
+	const inView = [...days.entries()].filter(([key]) => key >= grid.start && key <= grid.end).map(([, day]) => day);
 	/** Sum a per-day quantity over the visible window. Called by: printSummary. Calls: nothing. */
-	const sum = (f: (d: Day) => number) => inView.reduce((n, d) => n + f(d), 0);
+	const sum = (pick: (day: Day) => number) => inView.reduce((total, day) => total + pick(day), 0);
 	/** Count distinct sessions of one tool in the window (a session spanning days counts once). Called by: printSummary. Calls: nothing. */
-	const sessions = (t: 'claude' | 'codex') => new Set(inView.flatMap((d) => [...d.sessions[t]])).size;
+	const sessions = (tool: Tool) => new Set(inView.flatMap((day) => [...day.sessions[tool]])).size;
 	/** Print one aligned `label  value` line. Called by: printSummary. Calls: dim. */
-	const row = (label: string, value: string) => console.log(`  ${dim(label.padEnd(16))}${value}`);
+	const row = (label: string, text: string) => console.log(`  ${dim(label.padEnd(16))}${text}`);
 
-	row('active days', `${s.activeDays} / ${s.totalDays}`);
-	row('streak', `${s.currentStreak}d current · ${s.longestStreak}d longest`);
-	if (s.busiest) row('busiest day', `${s.busiest.key} (${fmt(s.busiest.value)})`);
+	row('active days', `${summary.activeDays} / ${summary.totalDays}`);
+	row('streak', `${summary.currentStreak}d current · ${summary.longestStreak}d longest`);
+	if (summary.busiest) row('busiest day', `${summary.busiest.key} (${fmt(summary.busiest.value)})`);
 	console.log();
-	for (const t of ['claude', 'codex'] as const) {
-		if (tool !== 'all' && tool !== t) continue;
+	for (const tool of ['claude', 'codex'] as const) {
+		if (filter !== 'all' && filter !== tool) continue;
 		row(
-			t === 'claude' ? 'Claude Code' : 'Codex',
-			`${fmt(sessions(t))} sessions · ${fmt(sum((d) => d.prompts[t]))} prompts · ${fmt(sum((d) => d.tokens[t]))} tokens`
+			TOOL_LABEL[tool],
+			`${fmt(sessions(tool))} sessions · ${fmt(sum((day) => day.prompts[tool]))} prompts · ${fmt(sum((day) => day.tokens[tool]))} tokens`
 		);
 	}
 	if (withGit) {
-		const commits = sum((d) => d.commits);
-		const ai = sum((d) => d.aiCommits);
-		row('git', `${fmt(commits)} commits · ${fmt(ai)} AI-assisted (${commits ? Math.round((ai / commits) * 100) : 0}%)`);
+		const commits = sum((day) => day.commits);
+		const aiCommits = sum((day) => day.aiCommits);
+		const share = commits ? Math.round((aiCommits / commits) * 100) : 0;
+		row('git', `${fmt(commits)} commits · ${fmt(aiCommits)} AI-assisted (${share}%)`);
 	}
 
 	const projects = new Map<string, number>();
-	for (const d of inView) for (const [p, n] of d.projects) projects.set(p, (projects.get(p) ?? 0) + n);
-	const top = [...projects].sort((a, b) => b[1] - a[1]).slice(0, 5);
-	if (top.length) row('top projects', top.map(([p, n]) => `${p} ${dim(String(n))}`).join(dim(' · ')));
+	for (const day of inView) {
+		for (const [project, prompts] of day.projects) projects.set(project, (projects.get(project) ?? 0) + prompts);
+	}
+	const top = [...projects].sort((left, right) => right[1] - left[1]).slice(0, 5);
+	if (top.length) {
+		row('top projects', top.map(([project, prompts]) => `${project} ${dim(String(prompts))}`).join(dim(' · ')));
+	}
 }
 
 /**
@@ -154,18 +161,18 @@ function printSummary(days: Days, grid: Grid, s: Summary, tool: ToolFilter, with
  *
  * @returns resolves when output is written; exits early on `--help`, bad flags, or `--json`.
  * Called by: module top level.
- * Calls: die, gitAuthors, loadClaude, loadCodex, loadGit, printJson, buildGrid, summarize,
- *        renderGrid, printSummary, renderSvg.
+ * Calls: die, isMetric, isToolFilter, gitAuthors, loadClaude, loadCodex, loadGit, printJson,
+ *        buildGrid, summarize, renderGrid, printSummary, renderSvg.
  */
 async function main() {
 	if (args.help) {
 		console.log(HELP);
 		process.exit(0);
 	}
-	const metric = args.metric as Metric;
-	if (!METRICS.includes(metric)) die(`unknown metric "${args.metric}"`);
-	const tool = args.tool as ToolFilter;
-	if (!['claude', 'codex', 'all'].includes(tool)) die(`unknown tool "${args.tool}"`);
+	if (!isMetric(args.metric)) die(`unknown metric "${args.metric}"`);
+	if (!isToolFilter(args.tool)) die(`unknown tool "${args.tool}"`);
+	const metric: Metric = args.metric;
+	const filter: ToolFilter = args.tool;
 
 	const fitWeeks = Math.floor(((process.stdout.columns || 110) - 6) / 2);
 	const weeks = args.weeks ? Number(args.weeks) : Math.max(4, Math.min(53, fitWeeks));
@@ -174,21 +181,13 @@ async function main() {
 	const since = dayKey(gridStart(weeks));
 	const days: Days = new Map();
 	const withGit = !args['no-git'];
+	const gitRoots = (args['git-root'] ?? [join(homedir(), 'develop')]).map((root) => resolve(root));
 
 	const started = performance.now();
 	const [claudeFiles, codexFiles, repos] = await Promise.all([
 		loadClaude(days, since, args['claude-dir'] ? resolve(args['claude-dir']) : undefined),
 		loadCodex(days, since, args['codex-dir'] ? resolve(args['codex-dir']) : undefined),
-		withGit
-			? gitAuthors().then((authors) =>
-					loadGit(
-						days,
-						since,
-						(args['git-root'] ?? [join(homedir(), 'develop')]).map((r) => resolve(r)),
-						authors
-					)
-				)
-			: Promise.resolve(0)
+		withGit ? gitAuthors().then((authors) => loadGit(days, since, gitRoots, authors)) : Promise.resolve(0)
 	]);
 	const elapsed = ((performance.now() - started) / 1000).toFixed(1);
 
@@ -197,23 +196,26 @@ async function main() {
 		return;
 	}
 
-	const grid = buildGrid(days, metric, tool, weeks);
-	const s = summarize(grid);
-	const toolLabel = tool === 'all' ? 'Claude Code + Codex' : tool === 'claude' ? 'Claude Code' : 'Codex';
-	const scope = metric === 'commits' || metric === 'ai' ? 'git' : toolLabel;
+	const grid = buildGrid(days, metric, filter, weeks);
+	const summary = summarize(grid);
+	const isGitMetric = metric === 'commits' || metric === 'ai';
+	const scope = isGitMetric ? 'git' : TOOL_LABEL[filter];
 
 	console.log();
-	console.log(`  ${bold(`${fmt(s.total)} ${METRIC_LABEL[metric]}`)} ${dim(`in the last ${weeks} weeks · ${scope}`)}`);
+	console.log(
+		`  ${bold(`${fmt(summary.total)} ${METRIC_LABEL[metric]}`)} ${dim(`in the last ${weeks} weeks · ${scope}`)}`
+	);
 	console.log();
 	console.log(renderGrid(grid, metric));
 	console.log();
-	printSummary(days, grid, s, tool, withGit);
+	printSummary(days, grid, summary, filter, withGit);
 	console.log();
 	console.log(dim(`  scanned ${claudeFiles} Claude + ${codexFiles} Codex transcripts, ${repos} repos in ${elapsed}s`));
 
 	if (args.svg) {
 		const path = resolve(args.svg);
-		await Bun.write(path, renderSvg(grid, metric, s, scope === 'git' ? 'Git activity' : `Agent activity · ${scope}`));
+		const title = isGitMetric ? 'Git activity' : `Agent activity · ${scope}`;
+		await Bun.write(path, renderSvg(grid, metric, summary, title));
 		console.log(dim(`  wrote ${path}`));
 	}
 	console.log();

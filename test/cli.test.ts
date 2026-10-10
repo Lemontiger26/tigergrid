@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { JsonDay } from '../types/cli';
 import { buildGitFixture } from './helpers/git-fixture';
 
 // End-to-end: run the real CLI against all fixtures. The window is 520 weeks so the
@@ -28,18 +29,19 @@ const FIXTURE_ARGS = [
 
 /** Run the CLI with plain output; returns exit code, stdout and stderr. */
 function cli(...args: string[]) {
-	const r = Bun.spawnSync(['bun', 'src/cli.ts', ...args], { env: { ...process.env, NO_COLOR: '1' } });
-	return { code: r.exitCode, stdout: r.stdout.toString(), stderr: r.stderr.toString() };
+	const result = Bun.spawnSync(['bun', 'src/cli.ts', ...args], { env: { ...process.env, NO_COLOR: '1' } });
+	return { code: result.exitCode, stdout: result.stdout.toString(), stderr: result.stderr.toString() };
 }
 
 describe('--json', () => {
 	const { code, stdout } = cli('--json', ...FIXTURE_ARGS);
-	const rows = JSON.parse(stdout) as any[];
-	const byDate = Object.fromEntries(rows.map((r) => [r.date, r]));
+	// Our own --json output, whose shape types/cli.ts defines.
+	const rows = JSON.parse(stdout) as JsonDay[];
+	const byDate = Object.fromEntries(rows.map((result) => [result.date, result]));
 
 	test('exits cleanly with one row per active day, sorted by date', () => {
 		expect(code).toBe(0);
-		expect(rows.map((r) => r.date)).toEqual([
+		expect(rows.map((result) => result.date)).toEqual([
 			'2026-08-01',
 			'2026-09-08',
 			'2026-09-09',
@@ -82,17 +84,17 @@ describe('terminal output', () => {
 	});
 
 	test('--tool claude hides the Codex line', () => {
-		const r = cli('-t', 'claude', ...FIXTURE_ARGS);
-		expect(r.stdout).toContain('5 prompts in the last 520 weeks · Claude Code');
-		expect(r.stdout).not.toMatch(/Codex\s+\d+ sessions/);
+		const result = cli('-t', 'claude', ...FIXTURE_ARGS);
+		expect(result.stdout).toContain('5 prompts in the last 520 weeks · Claude Code');
+		expect(result.stdout).not.toMatch(/Codex\s+\d+ sessions/);
 	});
 });
 
 describe('--svg', () => {
 	test('writes a git-titled SVG for git metrics', () => {
 		const path = join(out, 'ai.svg');
-		const r = cli('-m', 'ai', '--svg', path, ...FIXTURE_ARGS);
-		expect(r.code).toBe(0);
+		const result = cli('-m', 'ai', '--svg', path, ...FIXTURE_ARGS);
+		expect(result.code).toBe(0);
 		expect(existsSync(path)).toBe(true);
 		const svg = readFileSync(path, 'utf8');
 		expect(svg).toContain('Git activity');
@@ -102,15 +104,15 @@ describe('--svg', () => {
 
 describe('argument errors', () => {
 	test('--help prints usage', () => {
-		const r = cli('--help');
-		expect(r.code).toBe(0);
-		expect(r.stdout).toStartWith('TigerGrid — a contribution graph');
+		const result = cli('--help');
+		expect(result.code).toBe(0);
+		expect(result.stdout).toStartWith('TigerGrid — a contribution graph');
 	});
 
 	test('an unknown metric exits 1 with a message', () => {
-		const r = cli('-m', 'vibes');
-		expect(r.code).toBe(1);
-		expect(r.stderr).toContain('tigergrid: unknown metric "vibes"');
+		const result = cli('-m', 'vibes');
+		expect(result.code).toBe(1);
+		expect(result.stderr).toContain('tigergrid: unknown metric "vibes"');
 	});
 
 	test('an unknown tool exits 1', () => {

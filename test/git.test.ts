@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import type { Days } from '../src/days';
+import type { Days } from '../types/days';
 import { loadGit } from '../src/sources/git';
 import { buildGitFixture } from './helpers/git-fixture';
 
@@ -19,13 +19,14 @@ describe('loadGit on the fixture repos', () => {
 		expect(repos).toBe(3);
 	});
 
-	test('counts only my commits inside the window, each hash once despite the clone', () => {
-		const commits = Object.fromEntries([...days].map(([k, d]) => [k, d.commits]));
+	test('counts only my commits inside the window, each hash once despite the clone, never the stash', () => {
+		const commits = Object.fromEntries([...days].map(([key, aggregate]) => [key, aggregate.commits]));
+		// No 2026-09-10 entry: that day only has the stash in acme/web.
 		expect(commits).toEqual({ '2026-09-08': 2, '2026-09-09': 1, '2026-09-12': 1 });
 	});
 
 	test("flags Co-Authored-By trailers and 'Generated with' footers as AI-assisted", () => {
-		const ai = Object.fromEntries([...days].map(([k, d]) => [k, d.aiCommits]));
+		const ai = Object.fromEntries([...days].map(([key, aggregate]) => [key, aggregate.aiCommits]));
 		// 09-08: Claude trailer (the README typo fix is human), 09-09: Claude Code footer, 09-12: Codex trailer
 		expect(ai).toEqual({ '2026-09-08': 1, '2026-09-09': 1, '2026-09-12': 1 });
 	});
@@ -37,9 +38,9 @@ describe('loadGit on the fixture repos', () => {
 	});
 
 	test('leaves agent counters alone', () => {
-		for (const d of days.values()) {
-			expect(d.prompts).toEqual({ claude: 0, codex: 0 });
-			expect(d.tokens).toEqual({ claude: 0, codex: 0 });
+		for (const aggregate of days.values()) {
+			expect(aggregate.prompts).toEqual({ claude: 0, codex: 0 });
+			expect(aggregate.tokens).toEqual({ claude: 0, codex: 0 });
 		}
 	});
 });

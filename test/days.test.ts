@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { bumpProject, day, dayKey, keyOfTimestamp, projectName, readJsonl, type Days } from '../src/days';
+import type { Days } from '../types/days';
+import { bumpProject, day, dayKey, keyOfTimestamp, projectName, readJsonl } from '../src/days';
 
 // bun test runs in UTC unless TZ is set, so local day keys equal UTC dates here.
 
@@ -56,21 +57,23 @@ describe('projectName', () => {
 
 describe('bumpProject', () => {
 	test('counts prompts per project and ignores unknown cwds', () => {
-		const d = day(new Map(), '2026-09-08');
-		bumpProject(d, '/Users/dev/acme/api');
-		bumpProject(d, '/Users/dev/acme/api');
-		bumpProject(d, '/Users/dev/acme/web');
-		bumpProject(d, undefined);
-		expect(Object.fromEntries(d.projects)).toEqual({ 'acme/api': 2, 'acme/web': 1 });
+		const aggregate = day(new Map(), '2026-09-08');
+		bumpProject(aggregate, '/Users/dev/acme/api');
+		bumpProject(aggregate, '/Users/dev/acme/api');
+		bumpProject(aggregate, '/Users/dev/acme/web');
+		bumpProject(aggregate, undefined);
+		expect(Object.fromEntries(aggregate.projects)).toEqual({ 'acme/api': 2, 'acme/web': 1 });
 	});
 });
 
 describe('readJsonl', () => {
 	test('yields every parseable line and skips the truncated last one', async () => {
-		const records = [];
-		for await (const r of readJsonl('test/fixtures/claude/-Users-dev-acme-api/claude-api-1.jsonl')) records.push(r);
+		const records: unknown[] = [];
+		for await (const record of readJsonl('test/fixtures/claude/-Users-dev-acme-api/claude-api-1.jsonl')) {
+			records.push(record);
+		}
 		// The fixture has 13 lines; the 13th is cut off mid-write.
 		expect(records).toHaveLength(12);
-		expect(records.at(-1).message.content[0].text).toBe('Shipped.');
+		expect(records.at(-1)).toMatchObject({ message: { content: [{ text: 'Shipped.' }] } });
 	});
 });

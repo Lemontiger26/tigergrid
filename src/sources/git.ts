@@ -1,7 +1,8 @@
 import { existsSync, type Dirent } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { day, keyOfTimestamp, type Days } from '../days';
+import type { Days } from '../../types/days';
+import { day, keyOfTimestamp } from '../days';
 
 // Trailers and footers that agents add to the commits they author.
 const AI_MARKERS =
@@ -23,12 +24,15 @@ async function findRepos(dir: string, maxDepth: number): Promise<string[]> {
 	try {
 		entries = await readdir(dir, { withFileTypes: true });
 	} catch {
+		// Unreadable (permissions, vanished mid-scan): it just contributes no repos.
 		return [];
 	}
-	if (entries.some((e) => e.name === '.git')) return [dir];
+	if (entries.some((entry) => entry.name === '.git')) return [dir];
 	if (maxDepth === 0) return [];
-	const subdirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.') && !SKIP.has(e.name));
-	return (await Promise.all(subdirs.map((e) => findRepos(join(dir, e.name), maxDepth - 1)))).flat();
+	const subdirs = entries.filter(
+		(entry) => entry.isDirectory() && !entry.name.startsWith('.') && !SKIP.has(entry.name)
+	);
+	return (await Promise.all(subdirs.map((entry) => findRepos(join(dir, entry.name), maxDepth - 1)))).flat();
 }
 
 /**
@@ -39,16 +43,17 @@ async function findRepos(dir: string, maxDepth: number): Promise<string[]> {
  * Calls: Bun.spawn (git).
  */
 async function git(repo: string, args: string[]): Promise<string> {
-	const p = Bun.spawn(['git', '-C', repo, ...args], { stdout: 'pipe', stderr: 'ignore' });
-	const out = await new Response(p.stdout).text();
-	await p.exited;
+	const proc = Bun.spawn(['git', '-C', repo, ...args], { stdout: 'pipe', stderr: 'ignore' });
+	const out = await new Response(proc.stdout).text();
+	await proc.exited;
 	return out;
 }
 
 /**
  * Count the user's commits per day across every repo under `roots`, and how many of them
- * an agent co-authored (matched by AI_MARKERS). Commits are filtered by `authors`, limited to
- * `since`, and deduplicated by hash because worktrees and clones share history.
+ * an agent co-authored (matched by AI_MARKERS). Reads all branches, remotes and tags but not
+ * stashes. Commits are filtered by `authors`, limited to `since`, and deduplicated by hash
+ * because worktrees and clones share history.
  *
  * @returns the number of repositories scanned; mutates `days` (commits, aiCommits).
  * Called by: cli, tests.
@@ -56,21 +61,23 @@ async function git(repo: string, args: string[]): Promise<string> {
  */
 export async function loadGit(days: Days, since: string, roots: string[], authors: string[]): Promise<number> {
 	const seen = new Set<string>();
-	const repos = (await Promise.all(roots.filter(existsSync).map((r) => findRepos(r, 4)))).flat();
+	const repos = (await Promise.all(roots.filter((root) => existsSync(root)).map((root) => findRepos(root, 4)))).flat();
+	const authorArgs = authors.map((author) => `--author=${author}`);
 
 	await Promise.all(
 		repos.map(async (repo) => {
-			const authorArgs = authors.map((a) => `--author=${a}`);
-			const out = await git(repo, ['log', '--all', `--since=${since}`, ...authorArgs, '--format=%H%x1f%aI%x1f%B%x1e']);
+			// Every branch, remote and tag, but not refs/stash: stash entries are commits too.
+			const refs = ['--branches', '--remotes', '--tags'];
+			const out = await git(repo, ['log', ...refs, `--since=${since}`, ...authorArgs, '--format=%H%x1f%aI%x1f%B%x1e']);
 			for (const entry of out.split('\x1e')) {
 				const [hash, date, body] = entry.trim().split('\x1f');
 				if (!hash || seen.has(hash)) continue;
 				seen.add(hash);
 				const key = keyOfTimestamp(date);
 				if (!key || key < since) continue;
-				const d = day(days, key);
-				d.commits++;
-				if (AI_MARKERS.test(body ?? '')) d.aiCommits++;
+				const aggregate = day(days, key);
+				aggregate.commits++;
+				if (AI_MARKERS.test(body ?? '')) aggregate.aiCommits++;
 			}
 		})
 	);

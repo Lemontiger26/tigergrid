@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { day, type Days } from '../src/days';
+import type { Days } from '../types/days';
+import { day } from '../src/days';
 import { buildGrid, summarize } from '../src/grid';
 import { renderSvg } from '../src/render/svg';
 
@@ -9,14 +10,14 @@ const { renderGrid } = await import('../src/render/terminal');
 
 const TODAY = new Date(2026, 8, 12); // Saturday
 const days: Days = new Map();
-for (const [key, n] of Object.entries({
+for (const [key, count] of Object.entries({
 	'2026-09-08': 2,
 	'2026-09-09': 2,
 	'2026-09-10': 1,
 	'2026-09-11': 1,
 	'2026-09-12': 1
 })) {
-	day(days, key).prompts.claude = n;
+	day(days, key).prompts.claude = count;
 }
 const grid = buildGrid(days, 'prompts', 'all', 2, TODAY);
 

@@ -1,4 +1,5 @@
-import { fmt, METRIC_LABEL, monthLabels, PALETTES, THEME, type Grid, type Metric, type Summary } from '../grid';
+import type { Grid, Metric, Summary, Theme } from '../../types/grid';
+import { fmt, METRIC_LABEL, monthLabels, PALETTES, THEME } from '../grid';
 
 const SIZE = 11;
 const GAP = 3;
@@ -14,7 +15,7 @@ const TOP = 80;
  * Called by: renderSvg.
  * Calls: nothing.
  */
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+const esc = (text: string) => text.replace(/[&<>"]/g, (char) => `&#${char.charCodeAt(0)};`);
 
 /**
  * Turn a level ramp into CSS custom properties `--l0` … `--l4`, so one set of cell classes
@@ -24,7 +25,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
  * Called by: renderSvg.
  * Calls: nothing.
  */
-const levelVars = (ramp: string[]) => ramp.map((c, i) => `--l${i}:${c};`).join('');
+const levelVars = (ramp: string[]) => ramp.map((hex, level) => `--l${level}:${hex};`).join('');
 
 /**
  * Turn a THEME entry into the CSS custom properties for card background, border and text.
@@ -33,8 +34,8 @@ const levelVars = (ramp: string[]) => ramp.map((c, i) => `--l${i}:${c};`).join('
  * Called by: renderSvg.
  * Calls: nothing.
  */
-const surfaceVars = (t: (typeof THEME)[keyof typeof THEME]) =>
-	`--bg:${t.bg};--border:${t.border};--fg:${t.fg};--muted:${t.muted};`;
+const surfaceVars = (theme: Theme) =>
+	`--bg:${theme.bg};--border:${theme.border};--fg:${theme.fg};--muted:${theme.muted};`;
 
 /**
  * Render the grid as a self-contained, embeddable SVG card: title, summary line, month and
@@ -59,7 +60,7 @@ export function renderSvg(grid: Grid, metric: Metric, summary: Summary, title: s
     .t{font-size:16px;font-weight:700;fill:var(--fg);letter-spacing:-.01em}
     .s{font-size:11px}
     .v{font-weight:600;fill:var(--fg)}
-    ${[0, 1, 2, 3, 4].map((i) => `.l${i}{fill:var(--l${i})}`).join('')}`;
+    ${[0, 1, 2, 3, 4].map((level) => `.l${level}{fill:var(--l${level})}`).join('')}`;
 
 	const parts: string[] = [];
 	parts.push(
@@ -71,17 +72,19 @@ export function renderSvg(grid: Grid, metric: Metric, summary: Summary, title: s
 	);
 
 	const labels = [...monthLabels(grid)];
-	labels.forEach(([col, name], i) => {
-		if ((labels[i + 1]?.[0] ?? Infinity) - col < 3) return;
-		parts.push(`<text x="${LEFT + col * STEP}" y="${TOP - 6}">${name}</text>`);
+	labels.forEach(([column, name], index) => {
+		if ((labels[index + 1]?.[0] ?? Infinity) - column < 3) return;
+		parts.push(`<text x="${LEFT + column * STEP}" y="${TOP - 6}">${name}</text>`);
 	});
-	['Mon', 'Wed', 'Fri'].forEach((d, i) => parts.push(`<text x="${PAD}" y="${TOP + i * 2 * STEP + 9}">${d}</text>`));
+	['Mon', 'Wed', 'Fri'].forEach((weekday, index) =>
+		parts.push(`<text x="${PAD}" y="${TOP + index * 2 * STEP + 9}">${weekday}</text>`)
+	);
 
-	grid.weeks.forEach((col, x) =>
-		col.forEach((c, y) => {
-			if (c.future) return;
+	grid.weeks.forEach((column, week) =>
+		column.forEach((cell, weekday) => {
+			if (cell.future) return;
 			parts.push(
-				`<rect class="l${c.level}" x="${LEFT + x * STEP}" y="${TOP + y * STEP}" width="${SIZE}" height="${SIZE}" rx="3"><title>${c.key}: ${fmt(c.value)} ${esc(METRIC_LABEL[metric])}</title></rect>`
+				`<rect class="l${cell.level}" x="${LEFT + week * STEP}" y="${TOP + weekday * STEP}" width="${SIZE}" height="${SIZE}" rx="3"><title>${cell.key}: ${fmt(cell.value)} ${esc(METRIC_LABEL[metric])}</title></rect>`
 			);
 		})
 	);
@@ -89,8 +92,10 @@ export function renderSvg(grid: Grid, metric: Metric, summary: Summary, title: s
 	const legendX = width - PAD - 5 * STEP - 26;
 	const legendY = TOP + 7 * STEP + 12;
 	parts.push(`<text x="${legendX - 28}" y="${legendY + 9}">Less</text>`);
-	[0, 1, 2, 3, 4].forEach((l) =>
-		parts.push(`<rect class="l${l}" x="${legendX + l * STEP}" y="${legendY}" width="${SIZE}" height="${SIZE}" rx="3"/>`)
+	[0, 1, 2, 3, 4].forEach((level) =>
+		parts.push(
+			`<rect class="l${level}" x="${legendX + level * STEP}" y="${legendY}" width="${SIZE}" height="${SIZE}" rx="3"/>`
+		)
 	);
 	parts.push(`<text x="${legendX + 5 * STEP + 3}" y="${legendY + 9}">More</text>`);
 

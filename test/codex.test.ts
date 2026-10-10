@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
-import type { Days } from '../src/days';
+import type { Days } from '../types/days';
 import { fresh, loadCodex } from '../src/sources/codex';
 
 const HOME = 'test/fixtures/codex';
@@ -35,22 +35,22 @@ describe('loadCodex on the fixtures', () => {
 	});
 
 	test("2026-09-10: one prompt; tokens from usage records, deduped, plus the sub-agent's", () => {
-		const d = days.get('2026-09-10')!;
-		expect(d.prompts.codex).toBe(1); // the sub-agent's task_started doesn't count
+		const aggregate = days.get('2026-09-10')!;
+		expect(aggregate.prompts.codex).toBe(1); // the sub-agent's task_started doesn't count
 		// r1 (logged twice) 250 + r2 600 + sub-agent r9 300; the token_count event is ignored
-		expect(d.tokens.codex).toBe(1150);
+		expect(aggregate.tokens.codex).toBe(1150);
 	});
 
 	test('2026-09-11: a turn on the next day lands on the next day', () => {
-		const d = days.get('2026-09-11')!;
-		expect(d.prompts.codex).toBe(1);
-		expect(d.tokens.codex).toBe(10);
+		const aggregate = days.get('2026-09-11')!;
+		expect(aggregate.prompts.codex).toBe(1);
+		expect(aggregate.tokens.codex).toBe(10);
 	});
 
 	test('2026-09-12: legacy rollout falls back to token_count and skips repeated totals', () => {
-		const d = days.get('2026-09-12')!;
-		expect(d.prompts.codex).toBe(1);
-		expect(d.tokens.codex).toBe(700 + 500);
+		const aggregate = days.get('2026-09-12')!;
+		expect(aggregate.prompts.codex).toBe(1);
+		expect(aggregate.tokens.codex).toBe(700 + 500);
 	});
 
 	test("sessions come from the file's own session_meta, never the parent's copy", () => {

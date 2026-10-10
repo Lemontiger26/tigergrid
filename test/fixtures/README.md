@@ -16,7 +16,7 @@ Every transcript line is written to cover one rule. Lines that must *not* count 
 | `codex/sessions/2026/09/20/…codex-imported-1.jsonl` | Thread Codex imported from Claude Code, restamped with the import time. Skipped completely |
 | `codex/archived_sessions/…codex-legacy-1.jsonl` | Old-style rollout: only `token_count` events, one repeated total that must be skipped |
 | `codex/external_agent_session_imports.json` | The import ledger that names `codex-imported-1` |
-| `git/repos.json` | Turned into real repos in a temp dir by `test/helpers/git-fixture.ts`: AI and human commits, a colleague's commit, an old commit, a clone (same hashes), a repo in `node_modules`, and one past the depth limit |
+| `git/repos.json` | Turned into real repos in a temp dir by `test/helpers/git-fixture.ts`: AI and human commits, a colleague's commit, an old commit, a stash dated 09-10 (must not count), a clone (same hashes), a repo in `node_modules`, and one past the depth limit |
 
 ## Expected results (`since = 2026-09-01`)
 
