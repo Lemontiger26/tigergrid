@@ -1,0 +1,17 @@
+{
+	"name": "agentgrid",
+	"version": "0.1.0",
+	"description": "A GitHub-style contribution graph of your AI coding agents (Claude Code, Codex) and AI-assisted commits",
+	"type": "module",
+	"bin": {
+		"agentgrid": "src/cli.ts"
+	},
+	"scripts": {
+		"start": "bun src/cli.ts",
+		"check": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"typescript": "^5.6.0"
+	}
+}
