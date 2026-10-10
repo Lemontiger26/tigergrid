@@ -21,9 +21,9 @@ import { loadClaude } from './sources/claude';
 import { loadCodex } from './sources/codex';
 import { loadGit } from './sources/git';
 
-const HELP = `agentgrid — a contribution graph of your AI coding agents
+const HELP = `TigerGrid — a contribution graph of your AI coding agents
 
-Usage: agentgrid [options]
+Usage: tigergrid [options]
 
   -m, --metric <name>   prompts | sessions | tokens | commits | ai   (default: prompts)
   -t, --tool <name>     claude | codex | all                          (default: all)
@@ -61,7 +61,7 @@ const { values: args } = parseArgs({
  * Calls: console.error, process.exit.
  */
 const die = (msg: string): never => {
-	console.error(`agentgrid: ${msg}\n\n${HELP}`);
+	console.error(`tigergrid: ${msg}\n\n${HELP}`);
 	process.exit(1);
 };
 

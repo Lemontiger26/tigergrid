@@ -1,4 +1,4 @@
-# agentgrid
+# TigerGrid
 
 A GitHub-style contribution graph of your AI coding agents: Claude Code and Codex sessions, prompts and tokens, plus the share of your git commits that agents co-authored. Everything is read locally; nothing leaves the machine.
 
@@ -15,9 +15,9 @@ Run `bun start --help` for all flags.
 
 | Script | Output |
 | --- | --- |
-| `bun run svg` | `out/agentgrid.svg`, 53 weeks of prompts. Extra flags pass through: `bun run svg -m tokens -t claude` |
-| `bun run svg:all` | `out/agentgrid-<metric>.svg` for all five metrics |
-| `bun run json` | `out/agentgrid.json`, per-day sessions/prompts/tokens/commits/projects. Flags pass through too. |
+| `bun run svg` | `out/tigergrid.svg`, 53 weeks of prompts. Extra flags pass through: `bun run svg -m tokens -t claude` |
+| `bun run svg:all` | `out/tigergrid-<metric>.svg` for all five metrics |
+| `bun run json` | `out/tigergrid.json`, per-day sessions/prompts/tokens/commits/projects. Flags pass through too. |
 
 SVGs follow the viewer's `prefers-color-scheme`. Each metric has its own colour: lime (prompts), blue (sessions), violet (tokens), mint (commits), rose (AI-assisted commits). Light ramps run from pastel tag fills to saturated tag text; dark ramps go from dim tints to neon on a near-black card. Colours live in `PALETTES` / `THEME` in `src/grid.ts`.
 
