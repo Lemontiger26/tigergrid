@@ -1,0 +1,9 @@
+node_modules
+out
+bun.lock
+
+# prose: hand-authored, not part of the enforced format surface
+**/*.md
+
+# fixtures: hand-laid-out so each line reads as one scenario
+test/fixtures
