@@ -1,5 +1,7 @@
 # TigerGrid
 
+[![CI](https://github.com/Lemontiger26/tigergrid/actions/workflows/ci.yml/badge.svg)](https://github.com/Lemontiger26/tigergrid/actions/workflows/ci.yml)
+
 A GitHub-style contribution graph of your AI coding agents: Claude Code and Codex sessions, prompts and tokens, plus the share of your git commits that agents co-authored. Everything is read locally; nothing leaves the machine.
 
 ```sh
@@ -50,3 +52,7 @@ The fixtures in [`test/fixtures/`](test/fixtures/README.md) are a small fictiona
 - Claude Code deletes transcripts after `cleanupPeriodDays` (default 30), so history only goes back as far as you've kept it. Raise that setting if you want a full year.
 - Codex's legacy→paginated history migration restamped some old threads with the migration time. Imported threads are filtered out; any remaining native ones show up on the migration date.
 - Levels are GitHub-style quartiles over the active days in view, so colours are relative, not absolute.
+
+## License
+
+[Apache-2.0](LICENSE).

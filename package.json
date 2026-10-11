@@ -2,6 +2,7 @@
 	"name": "tigergrid",
 	"version": "0.1.0",
 	"description": "A contribution graph of your AI coding agents (Claude Code, Codex) and AI-assisted commits",
+	"license": "Apache-2.0",
 	"type": "module",
 	"bin": {
 		"tigergrid": "src/cli.ts"

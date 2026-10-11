@@ -39,7 +39,7 @@ describe('--json', () => {
 	const rows = JSON.parse(stdout) as JsonDay[];
 	const byDate = Object.fromEntries(rows.map((result) => [result.date, result]));
 
-	test('exits cleanly with one row per active day, sorted by date', () => {
+	test('exits cleanly with one row per active day, sorted by date, and no footer', () => {
 		expect(code).toBe(0);
 		expect(rows.map((result) => result.date)).toEqual([
 			'2026-08-01',

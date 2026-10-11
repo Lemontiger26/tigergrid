@@ -110,16 +110,26 @@ function printJson(days: Days) {
 }
 
 /**
+ * Select the aggregates that fall inside the grid's window (start to today).
+ *
+ * @returns the in-window days, in no particular order.
+ * Called by: printSummary, main.
+ * Calls: nothing.
+ */
+const daysInView = (days: Days, grid: Grid): Day[] =>
+	[...days.entries()].filter(([key]) => key >= grid.start && key <= grid.end).map(([, day]) => day);
+
+/**
  * Print the stats block under the graph: streaks and busiest day for the chosen metric,
  * then window totals for every source regardless of metric (sessions/prompts/tokens per tool,
  * commits and the AI-assisted share) and the top five projects by prompts.
  *
  * @returns nothing; writes to stdout.
  * Called by: main.
- * Calls: fmt, dim; the local helpers row, sum and sessions.
+ * Calls: daysInView, fmt, dim; the local helpers row, sum and sessions.
  */
 function printSummary(days: Days, grid: Grid, summary: Summary, filter: ToolFilter, withGit: boolean) {
-	const inView = [...days.entries()].filter(([key]) => key >= grid.start && key <= grid.end).map(([, day]) => day);
+	const inView = daysInView(days, grid);
 	/** Sum a per-day quantity over the visible window. Called by: printSummary. Calls: nothing. */
 	const sum = (pick: (day: Day) => number) => inView.reduce((total, day) => total + pick(day), 0);
 	/** Count distinct sessions of one tool in the window (a session spanning days counts once). Called by: printSummary. Calls: nothing. */
