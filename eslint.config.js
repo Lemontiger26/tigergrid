@@ -29,7 +29,7 @@ const conventions = {
 // Type-aware: the `no-unsafe-*` family surfaces the hidden `any` (JSON.parse, file reads)
 // that never says the word.
 export default tseslint.config(
-	{ ignores: ['**/node_modules', 'out'] },
+	{ ignores: ['**/node_modules', 'out', 'dist'] },
 	js.configs.recommended,
 	...tseslint.configs.recommendedTypeChecked,
 	prettier,

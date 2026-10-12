@@ -103,6 +103,12 @@ describe('--svg', () => {
 });
 
 describe('argument errors', () => {
+	test('--version names the package version; from source the commit is "dev"', () => {
+		const result = cli('--version');
+		expect(result.code).toBe(0);
+		expect(result.stdout.trim()).toMatch(/^tigergrid \d+\.\d+\.\d+ \(dev\)$/);
+	});
+
 	test('--help prints usage', () => {
 		const result = cli('--help');
 		expect(result.code).toBe(0);

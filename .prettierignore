@@ -7,3 +7,4 @@ bun.lock
 
 # fixtures: hand-laid-out so each line reads as one scenario
 test/fixtures
+dist

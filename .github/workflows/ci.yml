@@ -44,3 +44,47 @@ jobs:
 
       - name: Test
         run: bun run test
+
+  # Each target is built and smoke-tested on matching hardware; the binaries are attached
+  # to the run as artifacts.
+  binaries:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: bun-linux-x64
+          - runner: ubuntu-24.04-arm
+            target: bun-linux-arm64
+          - runner: macos-latest
+            target: bun-darwin-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun scripts/build.ts ${{ matrix.target }}
+
+      - name: Smoke test
+        run: |
+          bin="dist/tigergrid-${TARGET#bun-}"
+          "$bin" --version
+          days=$("$bin" --json -w 520 --no-git --claude-dir test/fixtures/claude --codex-dir test/fixtures/codex | jq length)
+          test "$days" = 6 || { echo "expected 6 fixture days, got $days"; exit 1; }
+          "$bin" -w 8 --no-git --claude-dir test/fixtures/claude --codex-dir test/fixtures/codex
+        env:
+          TARGET: ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tigergrid-${{ matrix.target }}
+          path: dist/

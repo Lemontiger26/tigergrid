@@ -12,6 +12,7 @@ import { bold, dim, renderGrid } from './render/terminal';
 import { loadClaude } from './sources/claude';
 import { loadCodex } from './sources/codex';
 import { loadGit } from './sources/git';
+import pkg from '../package.json';
 
 const HELP = `TigerGrid — a contribution graph of your AI coding agents
 
@@ -27,6 +28,7 @@ Usage: tigergrid [options]
       --no-git          skip the git scan
       --svg <file>      also write an embeddable SVG
       --json            print per-day data as JSON instead of the graph
+  -v, --version         print the version and the commit it was built from
   -h, --help
 
 Sources: Claude Code transcripts, Codex rollouts, and git repos under --git-root.
@@ -47,9 +49,21 @@ const { values: args } = parseArgs({
 		'no-git': { type: 'boolean', default: false },
 		svg: { type: 'string' },
 		json: { type: 'boolean', default: false },
+		version: { type: 'boolean', short: 'v', default: false },
 		help: { type: 'boolean', short: 'h', default: false }
 	}
 });
+
+/**
+ * The `--version` line. Compiled binaries carry the commit they were built from
+ * (scripts/build.ts sets process.env.TIGERGRID_COMMIT at compile time); running from
+ * source says `dev`.
+ *
+ * @returns e.g. `tigergrid 0.1.0 (3d9b5ea)`.
+ * Called by: main.
+ * Calls: nothing.
+ */
+const versionLine = () => `tigergrid ${pkg.version} (${process.env.TIGERGRID_COMMIT ?? 'dev'})`;
 
 /**
  * Abort on invalid input: print the message and the usage text to stderr, exit with code 1.
@@ -171,10 +185,14 @@ function printSummary(days: Days, grid: Grid, summary: Summary, filter: ToolFilt
  *
  * @returns resolves when output is written; exits early on `--help`, bad flags, or `--json`.
  * Called by: module top level.
- * Calls: die, isMetric, isToolFilter, gitAuthors, loadClaude, loadCodex, loadGit, printJson,
+ * Calls: versionLine, die, isMetric, isToolFilter, gitAuthors, loadClaude, loadCodex, loadGit, printJson,
  *        buildGrid, summarize, renderGrid, printSummary, renderSvg.
  */
 async function main() {
+	if (args.version) {
+		console.log(versionLine());
+		process.exit(0);
+	}
 	if (args.help) {
 		console.log(HELP);
 		process.exit(0);

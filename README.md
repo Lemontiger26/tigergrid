@@ -33,6 +33,18 @@ SVGs follow the viewer's `prefers-color-scheme`. Each metric has its own colour:
 
 `tokens` means fresh tokens: uncached input + cache writes + output. Cache reads are excluded because they would swamp everything else.
 
+## Standalone binaries
+
+`bun run build` compiles single-file executables into `dist/` (no Bun needed to run them), plus `dist/SHA256SUMS`:
+
+| Binary | Platform |
+| --- | --- |
+| `tigergrid-darwin-arm64` | macOS on Apple silicon |
+| `tigergrid-linux-x64` | Linux x86-64 (glibc) |
+| `tigergrid-linux-arm64` | Linux ARM64 (glibc) |
+
+`bun scripts/build.ts bun-linux-x64` builds a single target. `tigergrid --version` prints the version and the commit the binary was built from (`-dirty` if the working tree had uncommitted changes). Compiled binaries ignore `.env` and `bunfig.toml` files in the directory they run from. CI builds and smoke-tests each binary on matching hardware and attaches them to the run.
+
 ## Development
 
 ```sh
