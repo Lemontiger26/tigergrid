@@ -41,3 +41,14 @@ export interface Summary {
 	longestStreak: number;
 	busiest: Cell | null;
 }
+
+/** How the terminal grid draws a day: `wide` (▆▆, gaps both ways) or `matrix` (▐█, dense). */
+export type CellStyle = 'wide' | 'matrix';
+
+/** Which colour ramp the terminal grid uses; detected from the terminal unless --theme is given. */
+export type TerminalTheme = 'light' | 'dark';
+
+export interface RenderOptions {
+	cells: CellStyle;
+	theme: TerminalTheme;
+}

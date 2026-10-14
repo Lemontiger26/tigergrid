@@ -4,11 +4,12 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { JsonDay } from '../types/cli';
 import type { Day, Days, Tool } from '../types/days';
-import type { Grid, Metric, Summary, ToolFilter } from '../types/grid';
+import type { CellStyle, Grid, Metric, Summary, TerminalTheme, ToolFilter } from '../types/grid';
 import { dayKey } from './days';
 import { buildGrid, fmt, gridStart, isMetric, isToolFilter, METRIC_LABEL, summarize } from './grid';
 import { renderSvg } from './render/svg';
-import { bold, dim, renderGrid } from './render/terminal';
+import { bold, cellWidth, dim, isCellStyle, renderGrid } from './render/terminal';
+import { detectTheme, isTerminalTheme } from './render/theme';
 import { loadClaude } from './sources/claude';
 import { loadCodex } from './sources/codex';
 import { loadGit } from './sources/git';
@@ -28,6 +29,8 @@ Usage: tigergrid [options]
       --no-git          skip the git scan
       --svg <file>      also write an embeddable SVG
       --json            print per-day data as JSON instead of the graph
+      --cells <style>   wide | matrix                                (default: wide)
+      --theme <name>    light | dark                                 (default: ask the terminal)
   -v, --version         print the version and the commit it was built from
   -h, --help
 
@@ -49,6 +52,8 @@ const { values: args } = parseArgs({
 		'no-git': { type: 'boolean', default: false },
 		svg: { type: 'string' },
 		json: { type: 'boolean', default: false },
+		cells: { type: 'string', default: 'wide' },
+		theme: { type: 'string' },
 		version: { type: 'boolean', short: 'v', default: false },
 		help: { type: 'boolean', short: 'h', default: false }
 	}
@@ -185,7 +190,7 @@ function printSummary(days: Days, grid: Grid, summary: Summary, filter: ToolFilt
  *
  * @returns resolves when output is written; exits early on `--help`, bad flags, or `--json`.
  * Called by: module top level.
- * Calls: versionLine, die, isMetric, isToolFilter, gitAuthors, loadClaude, loadCodex, loadGit, printJson,
+ * Calls: versionLine, die, isMetric, isToolFilter, isCellStyle, isTerminalTheme, cellWidth, detectTheme, gitAuthors, loadClaude, loadCodex, loadGit, printJson,
  *        buildGrid, summarize, renderGrid, printSummary, renderSvg.
  */
 async function main() {
@@ -201,8 +206,11 @@ async function main() {
 	if (!isToolFilter(args.tool)) die(`unknown tool "${args.tool}"`);
 	const metric: Metric = args.metric;
 	const filter: ToolFilter = args.tool;
+	if (!isCellStyle(args.cells)) die(`unknown cell style "${args.cells}"`);
+	const cells: CellStyle = args.cells;
+	if (args.theme !== undefined && !isTerminalTheme(args.theme)) die(`unknown theme "${args.theme}"`);
 
-	const fitWeeks = Math.floor(((process.stdout.columns || 110) - 6) / 2);
+	const fitWeeks = Math.floor(((process.stdout.columns || 110) - 6) / cellWidth(cells));
 	const weeks = args.weeks ? Number(args.weeks) : Math.max(4, Math.min(53, fitWeeks));
 	if (!Number.isInteger(weeks) || weeks < 1) die(`--weeks must be a positive integer`);
 
@@ -234,7 +242,9 @@ async function main() {
 		`  ${bold(`${fmt(summary.total)} ${METRIC_LABEL[metric]}`)} ${dim(`in the last ${weeks} weeks · ${scope}`)}`
 	);
 	console.log();
-	console.log(renderGrid(grid, metric));
+	// Only ask the terminal for its background when the grid is actually drawn.
+	const theme: TerminalTheme = args.theme ?? (await detectTheme());
+	console.log(renderGrid(grid, metric, { cells, theme }));
 	console.log();
 	printSummary(days, grid, summary, filter, withGit);
 	console.log();

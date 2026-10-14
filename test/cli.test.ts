@@ -121,6 +121,19 @@ describe('argument errors', () => {
 		expect(result.stderr).toContain('tigergrid: unknown metric "vibes"');
 	});
 
+	test('an unknown cell style or theme exits 1', () => {
+		expect(cli('--cells', 'round').stderr).toContain('tigergrid: unknown cell style "round"');
+		expect(cli('--theme', 'solarized').stderr).toContain('tigergrid: unknown theme "solarized"');
+	});
+
+	test('both cell styles render', () => {
+		for (const style of ['wide', 'matrix']) {
+			const result = cli('--cells', style, '--theme', 'light', ...FIXTURE_ARGS);
+			expect(result.code).toBe(0);
+			expect(result.stdout).toContain('Less');
+		}
+	});
+
 	test('an unknown tool exits 1', () => {
 		expect(cli('-t', 'cursor').code).toBe(1);
 	});
