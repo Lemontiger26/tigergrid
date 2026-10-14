@@ -45,7 +45,7 @@ SVGs follow the viewer's `prefers-color-scheme`. Each metric has its own colour:
 
 `bun scripts/build.ts bun-linux-x64` builds a single target. `tigergrid --version` prints the version and the commit the binary was built from (`-dirty` if the working tree had uncommitted changes). Compiled binaries ignore `.env` and `bunfig.toml` files in the directory they run from. CI builds and smoke-tests each binary on matching hardware and attaches them to the run.
 
-`bun run smoke` does the same on your machine: it builds all three, runs the one matching your OS and CPU natively and the Linux ones in Docker containers of their architecture (`debian:bookworm-slim`, emulated where the CPU differs), and checks `--version`, the fixture numbers and the terminal output. Targets that can't run locally, like the macOS binary on Linux, are skipped.
+`bun run smoke` does the same on your machine: it builds all three, runs the one matching your OS and CPU natively and the Linux ones in Docker containers of their architecture (`debian:bookworm-slim`, emulated where the CPU differs), and checks `--version`, the fixture numbers, the terminal output and an SVG in each cell style. `bun scripts/smoke.ts bun-linux-x64` checks a single target; CI runs it that way on each platform. Targets that can't run locally, like the macOS binary on Linux, are skipped.
 
 ## Development
 
