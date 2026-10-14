@@ -12,7 +12,7 @@
 		"build": "bun scripts/build.ts",
 		"smoke": "bun scripts/smoke.ts",
 		"svg": "mkdir -p out && bun src/cli.ts -w 53 --svg out/tigergrid.svg",
-		"svg:all": "mkdir -p out && for m in prompts sessions tokens commits ai; do bun src/cli.ts -w 53 -m $m --svg out/tigergrid-$m.svg > /dev/null; done && echo \"wrote out/tigergrid-*.svg\"",
+		"svg:all": "bun scripts/svg-all.ts",
 		"json": "mkdir -p out && bun src/cli.ts -w 53 --json > out/tigergrid.json",
 		"test": "bun test",
 		"check": "tsc --noEmit",

@@ -18,7 +18,7 @@ Run `bun start --help` for all flags.
 | Script | Output |
 | --- | --- |
 | `bun run svg` | `out/tigergrid.svg`, 53 weeks of prompts. Extra flags pass through: `bun run svg -m tokens -t claude` |
-| `bun run svg:all` | `out/tigergrid-<metric>.svg` for all five metrics |
+| `bun run svg:all` | `out/tigergrid-<metric>.svg` for all five metrics. Extra flags pass through: `bun run svg:all --cells wide` |
 | `bun run json` | `out/tigergrid.json`, per-day sessions/prompts/tokens/commits/projects. Flags pass through too. |
 
 SVGs follow the viewer's `prefers-color-scheme`. Each metric has its own colour: lime (prompts), blue (sessions), violet (tokens), mint (commits), rose (AI-assisted commits). Light ramps run from pastel tag fills to saturated tag text; dark ramps go from dim tints to neon on a near-black card. Colours live in `PALETTES` / `THEME` in `src/grid.ts`.
