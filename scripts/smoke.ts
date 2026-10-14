@@ -69,11 +69,18 @@ function exec(cmd: string[]): { code: number; stdout: string; stderr: string } {
 /**
  * Check that a Docker daemon is reachable.
  *
- * @returns true if `docker info` succeeds.
+ * @returns true if `docker info` succeeds; false if it fails or `docker` isn't installed.
  * Called by: module top level.
  * Calls: exec.
  */
-const dockerAvailable = (): boolean => exec(['docker', 'info', '--format', '{{.ServerVersion}}']).code === 0;
+function dockerAvailable(): boolean {
+	try {
+		return exec(['docker', 'info', '--format', '{{.ServerVersion}}']).code === 0;
+	} catch {
+		// Bun.spawnSync throws when the executable doesn't exist (e.g. GitHub's macOS runners).
+		return false;
+	}
+}
 
 /**
  * Decide how to run a target's binary on this machine: directly when OS and CPU match the
