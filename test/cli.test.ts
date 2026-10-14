@@ -130,8 +130,20 @@ describe('argument errors', () => {
 		for (const style of ['wide', 'matrix']) {
 			const result = cli('--cells', style, '--theme', 'light', ...FIXTURE_ARGS);
 			expect(result.code).toBe(0);
-			expect(result.stdout).toContain('Less');
+			expect(result.stdout).toContain('Mon ');
+			expect(result.stdout).not.toContain('Less');
 		}
+	});
+
+	test('matrix is the default: two columns per week', () => {
+		const grid = cli('-w', '8', ...FIXTURE_ARGS.slice(2)).stdout.split('\n');
+		expect(grid.find((line) => line.startsWith('Mon '))).toHaveLength(4 + 8 * 2);
+	});
+
+	test('errors go to stderr alone, the usage text to stdout', () => {
+		const result = cli('-m', 'vibes');
+		expect(result.stderr.trim()).toBe('tigergrid: unknown metric "vibes"');
+		expect(result.stdout).toContain('Usage: tigergrid [options]');
 	});
 
 	test('an unknown tool exits 1', () => {

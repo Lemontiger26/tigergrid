@@ -42,7 +42,7 @@ export interface Summary {
 	busiest: Cell | null;
 }
 
-/** How the terminal grid draws a day: `wide` (▆▆, gaps both ways) or `matrix` (▐█, dense). */
+/** How the terminal grid draws a day: `matrix` (▐█, dense, the default) or `wide` (▆▆, gaps both ways). */
 export type CellStyle = 'wide' | 'matrix';
 
 /** Which colour ramp the terminal grid uses; detected from the terminal unless --theme is given. */

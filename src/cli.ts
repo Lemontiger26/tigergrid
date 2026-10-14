@@ -29,7 +29,7 @@ Usage: tigergrid [options]
       --no-git          skip the git scan
       --svg <file>      also write an embeddable SVG
       --json            print per-day data as JSON instead of the graph
-      --cells <style>   wide | matrix                                (default: wide)
+      --cells <style>   matrix | wide                                (default: matrix)
       --theme <name>    light | dark                                 (default: ask the terminal)
   -v, --version         print the version and the commit it was built from
   -h, --help
@@ -52,7 +52,7 @@ const { values: args } = parseArgs({
 		'no-git': { type: 'boolean', default: false },
 		svg: { type: 'string' },
 		json: { type: 'boolean', default: false },
-		cells: { type: 'string', default: 'wide' },
+		cells: { type: 'string', default: 'matrix' },
 		theme: { type: 'string' },
 		version: { type: 'boolean', short: 'v', default: false },
 		help: { type: 'boolean', short: 'h', default: false }
@@ -71,14 +71,16 @@ const { values: args } = parseArgs({
 const versionLine = () => `tigergrid ${pkg.version} (${process.env.TIGERGRID_COMMIT ?? 'dev'})`;
 
 /**
- * Abort on invalid input: print the message and the usage text to stderr, exit with code 1.
+ * Abort on invalid input: print the message to stderr and the usage text to stdout, exit with code 1.
  *
  * @returns never.
  * Called by: main (argument validation).
  * Calls: console.error, process.exit.
  */
 function die(message: string): never {
-	console.error(`tigergrid: ${message}\n\n${HELP}`);
+	// Only the error goes to stderr (terminals often colour it); the usage text is ordinary output.
+	console.error(`tigergrid: ${message}`);
+	console.log(`\n${HELP}`);
 	process.exit(1);
 }
 

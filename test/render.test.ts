@@ -23,7 +23,7 @@ const grid = buildGrid(days, 'prompts', 'all', 2, TODAY);
 
 describe('renderGrid (no colour)', () => {
 	// Weeks of 08-31 and 09-07. "Aug" is dropped (no room before "Sep"); Sunday 09-13 is still in the future.
-	test('wide (default): three columns per week, gaps between days and weeks', () => {
+	test('wide: three columns per week, gaps between days and weeks', () => {
 		expect(renderGrid(grid, 'prompts', { cells: 'wide', theme: 'light' })).toBe(
 			[
 				'        Sep',
@@ -33,33 +33,15 @@ describe('renderGrid (no colour)', () => {
 				'     · ░░ ',
 				'Fri  · ░░ ',
 				'     · ░░ ',
-				'     ·    ',
-				'    Less  · ░░ ▒▒ ▓▓ ██ More'
+				'     ·    '
 			].join('\n')
 		);
 	});
 
-	test('matrix: two columns per week', () => {
+	test('matrix (default): two columns per week, no legend', () => {
 		expect(renderGrid(grid, 'prompts', { cells: 'matrix', theme: 'dark' })).toBe(
-			[
-				'       Sep',
-				'Mon  · ·',
-				'     · ▓',
-				'Wed  · ▓',
-				'     · ░',
-				'Fri  · ░',
-				'     · ░',
-				'     ·  ',
-				'    Less · ░ ▒ ▓ █ More'
-			].join('\n')
+			['       Sep', 'Mon  · ·', '     · ▓', 'Wed  · ▓', '     · ░', 'Fri  · ░', '     · ░', '     ·  '].join('\n')
 		);
-	});
-
-	test('the legend aligns with the right edge of a wide grid', () => {
-		const wide = buildGrid(days, 'prompts', 'all', 20, TODAY);
-		const legend = renderGrid(wide, 'prompts', { cells: 'wide', theme: 'dark' }).split('\n').at(-1)!;
-		expect(legend.length).toBe(4 + 20 * 3);
-		expect(legend.trimStart()).toBe('Less  · ░░ ▒▒ ▓▓ ██ More');
 	});
 });
 

@@ -7,20 +7,18 @@ const WEEKDAYS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
 
 /**
  * Cell styles: the glyph drawn in colour, the shade characters used without colour (pipes,
- * NO_COLOR), the width in columns per week, and the spacing around the legend swatches (a
- * `wide` glyph carries its gap on the right, a `matrix` glyph on the left). `wide` leaves gaps
- * between days and weeks; `matrix` is denser: a gap between weeks only, so a busy week reads
- * as one bar.
+ * NO_COLOR), and the width in columns per week. `matrix` (the default) is dense: a gap between
+ * weeks only, so a busy week reads as one bar. `wide` leaves gaps between days and weeks.
  */
-const CELLS: Record<CellStyle, { glyph: string; mono: string[]; width: number; legendGap: [string, string] }> = {
-	wide: { glyph: '▆▆ ', mono: [' · ', '░░ ', '▒▒ ', '▓▓ ', '██ '], width: 3, legendGap: [' ', ''] },
-	matrix: { glyph: '▐█', mono: [' ·', ' ░', ' ▒', ' ▓', ' █'], width: 2, legendGap: ['', ' '] }
+const CELLS: Record<CellStyle, { glyph: string; mono: string[]; width: number }> = {
+	matrix: { glyph: '▐█', mono: [' ·', ' ░', ' ▒', ' ▓', ' █'], width: 2 },
+	wide: { glyph: '▆▆ ', mono: [' · ', '░░ ', '▒▒ ', '▓▓ ', '██ '], width: 3 }
 };
 
 /**
  * Check that a CLI string names a cell style.
  *
- * @returns true (narrowing the type) for "wide" or "matrix".
+ * @returns true (narrowing the type) for "matrix" or "wide".
  * Called by: cli.
  * Calls: nothing.
  */
@@ -29,7 +27,7 @@ export const isCellStyle = (value: string): value is CellStyle => value === 'wid
 /**
  * Columns one week takes in a cell style, so the CLI can fit the window to the terminal.
  *
- * @returns 3 for `wide`, 2 for `matrix`.
+ * @returns 2 for `matrix`, 3 for `wide`.
  * Called by: cli, renderGrid.
  * Calls: nothing.
  */
@@ -81,8 +79,8 @@ function cell(metric: Metric, level: number, options: RenderOptions): string {
 
 /**
  * Render the grid for the terminal: a month header, seven weekday rows (Mon..Sun) with one
- * cell per week, and a Less→More legend aligned to the grid's right edge. Month labels that
- * would collide with the next one are dropped; future days are left blank.
+ * cell per week. Month labels that would collide with the next one are dropped;
+ * future days are left blank. No legend: darker or brighter means more, as on GitHub.
  *
  * @returns the multi-line string, ready to print.
  * Called by: cli.
@@ -110,11 +108,5 @@ export function renderGrid(grid: Grid, metric: Metric, options: RenderOptions): 
 		}
 		lines.push(line);
 	}
-
-	const [before, after] = CELLS[options.cells].legendGap;
-	const swatches = [0, 1, 2, 3, 4].map((level) => cell(metric, level, options)).join('');
-	const legendWidth = 'Less'.length + before.length + 5 * width + after.length + 'More'.length;
-	const indent = ' '.repeat(Math.max(0, grid.weeks.length * width - legendWidth));
-	lines.push('    ' + indent + dim('Less') + before + swatches + after + dim('More'));
 	return lines.join('\n');
 }
