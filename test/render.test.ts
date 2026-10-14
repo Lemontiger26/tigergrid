@@ -71,3 +71,27 @@ describe('renderSvg', () => {
 		expect(svg).toContain('<tspan class="v">5</tspan> active days');
 	});
 });
+
+describe('renderSvg cell styles', () => {
+	const render = (cells?: 'matrix' | 'wide') =>
+		renderSvg(grid, 'prompts', summarize(grid), 'Agent activity', cells ? { cells } : {});
+
+	test('matrix (default): square-cornered bars that join within a week, monospace text', () => {
+		const svg = render();
+		expect(svg).toBe(render('matrix'));
+		// 09-08 sits in the second week (x 50 + 14 + offset 3) on Tuesday (y 80 + 14), 11 × 14 px, no rx
+		expect(svg).toContain('<rect class="l3" x="67" y="94" width="11" height="14"><title>2026-09-08');
+		// the next day starts exactly where this one ends: no gap between days
+		expect(svg).toContain('<rect class="l3" x="67" y="108" width="11" height="14"><title>2026-09-09');
+		expect(svg).toContain('ui-monospace');
+		expect(svg).not.toContain(' rx="3"');
+	});
+
+	test('wide: rounded squares with gaps both ways, sans-serif text', () => {
+		const svg = render('wide');
+		expect(svg).toContain('<rect class="l3" x="64" y="94" width="11" height="11" rx="3"><title>2026-09-08');
+		expect(svg).toContain('<rect class="l3" x="64" y="108" width="11" height="11" rx="3"><title>2026-09-09');
+		expect(svg).toContain('Inter,');
+		expect(svg).not.toContain('ui-monospace');
+	});
+});

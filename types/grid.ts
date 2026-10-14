@@ -52,3 +52,8 @@ export interface RenderOptions {
 	cells: CellStyle;
 	theme: TerminalTheme;
 }
+
+export interface SvgOptions {
+	/** Same styles as the terminal: `matrix` (joined bars, monospace) or `wide` (rounded squares). */
+	cells: CellStyle;
+}
