@@ -3,8 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import spec from '../fixtures/git/repos.json';
 
-// Isolate fixture commits from the developer's own git config (signing, hooks, default branch).
-const ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+// Isolate fixture commits from the developer's own git config (signing, hooks, default branch)
+// and from GIT_* variables inherited from a hook: `git commit -a` points GIT_INDEX_FILE at the
+// outer repo's temporary index, which would otherwise end up in every fixture commit.
+const ENV = {
+	...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))),
+	GIT_CONFIG_GLOBAL: '/dev/null',
+	GIT_CONFIG_NOSYSTEM: '1'
+};
 
 /**
  * Run git synchronously in `cwd` with an isolated config, throwing on failure.
