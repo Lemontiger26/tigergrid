@@ -8,7 +8,7 @@ import type { Day, Days, Tool } from '../types/days';
 import type { CellStyle, Grid, Metric, Summary, TerminalTheme, ToolFilter } from '../types/grid';
 import { dayKey } from './days';
 import { buildGrid, fmt, gridStart, isMetric, isToolFilter, METRIC_LABEL, summarize } from './grid';
-import { renderSvg } from './render/svg';
+import { renderBarsSvg, renderSvg } from './render/svg';
 import { barsWidth, bold, cellWidth, dim, isCellStyle, renderBars, renderGrid } from './render/terminal';
 import { detectTheme, isTerminalTheme } from './render/theme';
 import { loadClaude } from './sources/claude';
@@ -206,7 +206,7 @@ function printSummary(days: Days, grid: Grid, summaries: [Metric, Summary][], fi
  * @returns resolves when output is written; exits early on `--help`, bad flags, or `--json`.
  * Called by: module top level.
  * Calls: versionLine, die, isMetric, isToolFilter, isCellStyle, isTerminalTheme, cellWidth, barsWidth, detectTheme, gitAuthors, loadClaude, loadCodex,
- *        loadGit, printJson, buildGrid, summarize, renderGrid, renderBars, printSummary, renderSvg.
+ *        loadGit, printJson, buildGrid, summarize, renderGrid, renderBars, printSummary, renderSvg, renderBarsSvg.
  */
 async function main() {
 	if (args.version) {
@@ -225,7 +225,6 @@ async function main() {
 	const [metric] = metrics;
 	if (!metric) die('--metric needs at least one metric');
 	const combined = metrics.length > 1;
-	if (combined && args.svg) die('--svg takes a single metric');
 	if (!isToolFilter(args.tool)) die(`unknown tool "${args.tool}"`);
 	const filter: ToolFilter = args.tool;
 	if (!isCellStyle(args.cells)) die(`unknown cell style "${args.cells}"`);
@@ -280,7 +279,14 @@ async function main() {
 		const path = resolve(args.svg);
 		const title = gitOnly ? 'Git activity' : `Agent activity · ${scope}`;
 		await mkdir(dirname(path), { recursive: true });
-		await writeFile(path, renderSvg(grid, metric, summary, title, { cells }));
+		const svg = combined
+			? renderBarsSvg(
+					grids,
+					summaries.map(([, each]) => each),
+					title
+				)
+			: renderSvg(grid, metric, summary, title, { cells });
+		await writeFile(path, svg);
 		console.log(dim(`  wrote ${path}`));
 	}
 	console.log();

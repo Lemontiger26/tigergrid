@@ -122,3 +122,96 @@ export function renderSvg(
 
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><style>${style}</style>${parts.join('')}</svg>\n`;
 }
+
+/** Combined-graph geometry: bar width and gap within a day, gap between weeks, bar area height. */
+const BAR = { width: 4, gap: 1, weekGap: 4, height: 12 };
+
+/**
+ * Render several metrics as one SVG card, mirroring the terminal's renderBars: each day is a
+ * run of bottom-aligned bars, one per metric in the given order, whose height is that metric's
+ * level and whose colour is the metric's (its strongest ramp colour); level 0 is a thin grey
+ * baseline. One tooltip per day lists every metric, on a transparent hit area covering the
+ * whole cell. The legend names the bars instead of a Less/More scale, since height already
+ * shows the level. The grids must share a window.
+ *
+ * @returns the SVG document as a string (no external assets or fonts).
+ * Called by: cli (`--svg` with several metrics).
+ * Calls: monthLabels, fmt, esc, surfaceVars.
+ */
+export function renderBarsSvg(grids: [Metric, Grid][], summaries: Summary[], title: string): string {
+	const [first] = grids;
+	if (!first) return '';
+	const weeks = first[1].weeks;
+	const cellWidth = grids.length * BAR.width + (grids.length - 1) * BAR.gap;
+	const stepX = cellWidth + BAR.weekGap;
+	const width = LEFT + weeks.length * stepX + PAD + 10;
+	const legendY = TOP + 7 * STEP_Y + 12;
+	const height = legendY + BAR.height + 21;
+	/** CSS variables for each bar colour and the shared level-0 grey in one theme. Called by: renderBarsSvg. Calls: nothing. */
+	const barVars = (theme: 'light' | 'dark') =>
+		grids.map(([metric], index) => `--b${index}:${PALETTES[metric][theme][4]};`).join('') +
+		`--z:${PALETTES[first[0]][theme][0]};`;
+
+	const style = `
+    svg{${barVars('light')}${surfaceVars(THEME.light)}}
+    @media (prefers-color-scheme:dark){svg{${barVars('dark')}${surfaceVars(THEME.dark)}}}
+    text{font:500 10px ${MONO};fill:var(--muted)}
+    .t{font-size:16px;font-weight:700;fill:var(--fg)}
+    .s{font-size:11px}
+    .v{font-weight:600;fill:var(--fg)}
+    .h{fill:transparent}.z{fill:var(--z)}
+    ${grids.map((_, index) => `.b${index}{fill:var(--b${index})}`).join('')}`;
+
+	const parts: string[] = [];
+	parts.push(
+		`<rect x=".5" y=".5" width="${width - 1}" height="${height - 1}" rx="14" fill="var(--bg)" stroke="var(--border)"/>`
+	);
+	parts.push(`<text class="t" x="${PAD}" y="${PAD + 16}">${esc(title)}</text>`);
+	const totals = grids
+		.map(([metric], index) => `<tspan class="v">${fmt(summaries[index]!.total)}</tspan> ${esc(METRIC_LABEL[metric])}`)
+		.join(' · ');
+	parts.push(`<text class="s" x="${PAD}" y="${PAD + 34}">${totals}</text>`);
+
+	const labels = [...monthLabels(first[1])];
+	labels.forEach(([column, name], index) => {
+		// A month label is about 20px wide; skip it if the next one starts sooner.
+		if (((labels[index + 1]?.[0] ?? Infinity) - column) * stepX < 24) return;
+		parts.push(`<text x="${LEFT + column * stepX}" y="${TOP - 6}">${name}</text>`);
+	});
+	['Mon', 'Wed', 'Fri'].forEach((weekday, index) =>
+		parts.push(`<text x="${PAD}" y="${TOP + (1 + index * 2) * STEP_Y + BAR.height - 2}">${weekday}</text>`)
+	);
+
+	weeks.forEach((column, week) =>
+		column.forEach((cell, weekday) => {
+			if (cell.future) return;
+			const left = LEFT + week * stepX;
+			const top = TOP + weekday * STEP_Y;
+			const tooltip = grids
+				.map(([metric, grid]) => `${fmt(grid.weeks[week]![weekday]!.value)} ${esc(METRIC_LABEL[metric])}`)
+				.join(' · ');
+			const bars = grids.map(([, grid], index) => {
+				const level = grid.weeks[week]![weekday]!.level;
+				const barHeight = level ? (BAR.height * level) / 4 : 2;
+				const barLeft = left + index * (BAR.width + BAR.gap);
+				return `<rect class="${level ? `b${index}` : 'z'}" x="${barLeft}" y="${top + BAR.height - barHeight}" width="${BAR.width}" height="${barHeight}"/>`;
+			});
+			parts.push(
+				`<g><title>${cell.key}: ${tooltip}</title><rect class="h" x="${left}" y="${top}" width="${cellWidth}" height="${BAR.height}"/>${bars.join('')}</g>`
+			);
+		})
+	);
+
+	let legendX = LEFT;
+	grids.forEach(([metric], index) => {
+		const label = METRIC_LABEL[metric];
+		parts.push(
+			`<rect class="b${index}" x="${legendX}" y="${legendY}" width="${BAR.width * 2}" height="${BAR.height}"/>`
+		);
+		parts.push(`<text x="${legendX + BAR.width * 2 + 5}" y="${legendY + BAR.height - 2}">${esc(label)}</text>`);
+		// Monospace 10px runs about 6px per character.
+		legendX += BAR.width * 2 + 5 + label.length * 6 + 16;
+	});
+
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><style>${style}</style>${parts.join('')}</svg>\n`;
+}

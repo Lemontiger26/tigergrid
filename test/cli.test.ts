@@ -156,11 +156,17 @@ describe('argument errors', () => {
 		}
 	});
 
-	test('a combined graph rejects unknown metrics and --svg', () => {
+	test('a combined graph rejects unknown metrics', () => {
 		expect(cli('-m', 'prompts,vibes').stderr).toContain('tigergrid: unknown metric "vibes"');
-		expect(cli('-m', 'prompts,ai', '--svg', join(out, 'combined.svg')).stderr).toContain(
-			'tigergrid: --svg takes a single metric'
-		);
+	});
+
+	test('--svg with several metrics writes a combined card', () => {
+		const path = join(out, 'combined.svg');
+		expect(cli('-m', 'prompts,ai', '--svg', path, ...FIXTURE_ARGS).code).toBe(0);
+		const svg = readFileSync(path, 'utf8');
+		expect(svg).toContain('Agent activity · Claude Code + Codex + git');
+		expect(svg).toContain('<title>2026-09-08: 2 prompts · 1 AI-assisted commits</title>');
+		expect(svg).not.toContain('Less');
 	});
 
 	test('errors go to stderr alone, the usage text to stdout', () => {

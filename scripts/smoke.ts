@@ -45,14 +45,26 @@ const EXPECTED = { days: 6, prompts: 8 };
 const OUT_DIR = resolve('out/smoke');
 
 /**
- * What each SVG style must and must not contain, on top of what every card has: a complete
- * document and the fixture tooltip for 2026-09-08.
+ * The SVG cards to write, the flags for each, and what each must and must not contain on top
+ * of a complete document: the two cell styles of a single metric, and a combined graph.
  */
 const SVG_EXPECT = {
-	matrix: { has: ['ui-monospace', 'height="14"'], lacks: [' rx="3"'] },
-	wide: { has: [' rx="3"'], lacks: ['ui-monospace'] }
+	matrix: {
+		args: ['--cells', 'matrix'],
+		has: ['<title>2026-09-08: 2 prompts</title>', 'ui-monospace', 'height="14"'],
+		lacks: [' rx="3"']
+	},
+	wide: {
+		args: ['--cells', 'wide'],
+		has: ['<title>2026-09-08: 2 prompts</title>', ' rx="3"'],
+		lacks: ['ui-monospace']
+	},
+	bars: {
+		args: ['-m', 'prompts,sessions,tokens'],
+		has: ['<title>2026-09-08: 2 prompts · 1 agent sessions · 1,400 tokens</title>', 'class="b2"'],
+		lacks: ['Less']
+	}
 } as const;
-const SVG_COMMON = ['<title>2026-09-08: 2 prompts</title>'];
 
 /**
  * Run a command, capturing its output.
@@ -143,18 +155,17 @@ function runner(target: Target, docker: boolean): Runner | string {
 }
 
 /**
- * Have the binary write one SVG per cell style from the fixtures and check each file: a
- * complete document with the fixture tooltip, and the style's own geometry and
- * font (SVG_EXPECT).
+ * Have the binary write each SVG in SVG_EXPECT from the fixtures and check each file: a
+ * complete document with the fixture tooltip, and the style's own geometry and font.
  *
- * @returns null when both SVGs pass, otherwise the first problem found.
+ * @returns null when every SVG passes, otherwise the first problem found.
  * Called by: checkTarget.
  * Calls: exec, readFileSync.
  */
 function checkSvg(binary: string, run: Runner, target: string): string | null {
 	for (const [style, expect] of Object.entries(SVG_EXPECT)) {
 		const name = `${target}-${style}.svg`;
-		const result = exec(run.wrap([binary, '--svg', run.outPath(name), '--cells', style, '-w', '520', ...FIXTURES]));
+		const result = exec(run.wrap([binary, '--svg', run.outPath(name), ...expect.args, '-w', '520', ...FIXTURES]));
 		if (result.code !== 0) return `--svg ${style} exited ${result.code}: ${result.stderr.trim()}`;
 		let svg: string;
 		try {
@@ -164,7 +175,7 @@ function checkSvg(binary: string, run: Runner, target: string): string | null {
 			return `--svg ${style}: no file at ${join(OUT_DIR, name)}`;
 		}
 		if (!svg.startsWith('<svg ') || !svg.trimEnd().endsWith('</svg>')) return `--svg ${style}: not a complete SVG`;
-		const missing = [...SVG_COMMON, ...expect.has].find((marker) => !svg.includes(marker));
+		const missing = expect.has.find((marker) => !svg.includes(marker));
 		if (missing) return `--svg ${style}: missing ${missing}`;
 		const unexpected = expect.lacks.find((marker) => svg.includes(marker));
 		if (unexpected) return `--svg ${style}: unexpected ${unexpected}`;
@@ -207,7 +218,10 @@ function checkTarget(binary: string, run: Runner, target: string): { ok: boolean
 
 	const svgProblem = checkSvg(binary, run, target);
 	if (svgProblem) return { ok: false, detail: svgProblem };
-	return { ok: true, detail: `${version.stdout.trim()}; ${rows.length} days, ${prompts} prompts; svg matrix + wide` };
+	return {
+		ok: true,
+		detail: `${version.stdout.trim()}; ${rows.length} days, ${prompts} prompts; svg ${Object.keys(SVG_EXPECT).join(' + ')}`
+	};
 }
 
 /**

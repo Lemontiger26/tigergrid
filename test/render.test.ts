@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import type { Days } from '../types/days';
+import type { Grid, Metric } from '../types/grid';
 import { day } from '../src/days';
 import { buildGrid, summarize } from '../src/grid';
-import { renderSvg } from '../src/render/svg';
+import { renderBarsSvg, renderSvg } from '../src/render/svg';
 
 // The terminal renderer decides on colour at import time; force plain output first.
 process.env.NO_COLOR = '1';
@@ -53,17 +54,21 @@ describe('renderGrid (no colour)', () => {
 	});
 });
 
+// Combined graphs: the same prompts plus commits on 09-08 (2) and 09-09 (1). A fresh copy, since
+// `new Map(days)` would share the Day objects with the other tests.
+const withCommits: Days = new Map();
+for (const [key, aggregate] of days) day(withCommits, key).prompts = { ...aggregate.prompts };
+day(withCommits, '2026-09-08').commits = 2;
+day(withCommits, '2026-09-09').commits = 1;
+/** Prompts and commits grids over `weeks` weeks ending with `today`. */
+const combinedGrids = (today: Date, weeks: number) =>
+	(['prompts', 'commits'] as const).map((metric): [Metric, Grid] => [
+		metric,
+		buildGrid(withCommits, metric, 'all', weeks, today)
+	]);
+
 describe('renderBars (no colour)', () => {
-	// A fresh copy: `new Map(days)` would share the Day objects with the other tests.
-	const withCommits: Days = new Map();
-	for (const [key, aggregate] of days) day(withCommits, key).prompts = { ...aggregate.prompts };
-	day(withCommits, '2026-09-08').commits = 2;
-	day(withCommits, '2026-09-09').commits = 1;
-	const bars = (today: Date, weeks: number) =>
-		renderBars(
-			(['prompts', 'commits'] as const).map((metric) => [metric, buildGrid(withCommits, metric, 'all', weeks, today)]),
-			{ theme: 'dark' }
-		);
+	const bars = (today: Date, weeks: number) => renderBars(combinedGrids(today, weeks), { theme: 'dark' });
 
 	test('one bar per metric per day, its height the level, then a legend', () => {
 		// prompts levels 0,0,3,3,1,1,1 and commits 0,0,2,1,0,0,0 in the week of 09-06; · is level 0.
@@ -140,5 +145,38 @@ describe('renderSvg cell styles', () => {
 		expect(svg).toContain('<rect class="l3" x="64" y="122" width="11" height="11" rx="3"><title>2026-09-09');
 		expect(svg).toContain('Inter,');
 		expect(svg).not.toContain('ui-monospace');
+	});
+});
+
+describe('renderBarsSvg', () => {
+	const grids = combinedGrids(TODAY, 2);
+	const svg = renderBarsSvg(
+		grids,
+		grids.map(([, each]) => summarize(each)),
+		'Agent activity'
+	);
+
+	test('one group per past day, with a tooltip listing every metric', () => {
+		expect(svg.match(/<g><title>/g)).toHaveLength(14);
+		expect(svg).toContain('<title>2026-09-08: 2 prompts · 2 commits</title>');
+		expect(svg).toContain('<title>2026-09-01: 0 prompts · 0 commits</title>');
+	});
+
+	test('bars sit side by side, bottom-aligned, their height the level', () => {
+		// 09-08: second week (x 50 + 13), Tuesday (y 80 + 2 × 14); bars end at y 80 + 28 + 12 = 120.
+		expect(svg).toContain('<rect class="h" x="63" y="108" width="9" height="12"/>');
+		expect(svg).toContain('<rect class="b0" x="63" y="111" width="4" height="9"/>'); // prompts level 3
+		expect(svg).toContain('<rect class="b1" x="68" y="114" width="4" height="6"/>'); // commits level 2
+		// 09-12: prompts level 1, commits level 0 as a 2px grey baseline
+		expect(svg).toContain('<rect class="b0" x="63" y="173" width="4" height="3"/>');
+		expect(svg).toContain('<rect class="z" x="68" y="174" width="4" height="2"/>');
+	});
+
+	test('colours per metric and theme, totals in the summary, a legend of metrics', () => {
+		expect(svg).toContain('--b0:#5f8d0b;--b1:#0f7f6d;');
+		expect(svg).toMatch(/@media \(prefers-color-scheme:dark\)\{svg\{--b0:#c4f54a;--b1:#5ee9c5;/);
+		expect(svg).toContain('<tspan class="v">7</tspan> prompts · <tspan class="v">3</tspan> commits');
+		expect(svg).toContain('>commits</text>');
+		expect(svg).not.toContain('Less');
 	});
 });
