@@ -9,7 +9,10 @@ bun install
 bun start                    # prompts, last ~52 weeks (fits terminal width)
 bun start -m sessions        # pick the metric: prompts | sessions | tokens | commits | ai
 bun start -m tokens -t codex # ...and the tool: claude | codex | all
+bun start -m prompts,sessions,ai  # several metrics in one graph
 ```
+
+With a comma list of metrics, each day becomes a run of bars, one per metric in the order given: a bar's height is that metric's level and its colour is the metric's. A legend under the graph names the bars, and the summary shows active days and streaks per metric. `--svg` still takes a single metric.
 
 Run `bun start --help` for all flags.
 
