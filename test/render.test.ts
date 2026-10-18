@@ -6,7 +6,7 @@ import { renderSvg } from '../src/render/svg';
 
 // The terminal renderer decides on colour at import time; force plain output first.
 process.env.NO_COLOR = '1';
-const { renderGrid } = await import('../src/render/terminal');
+const { renderBars, renderGrid } = await import('../src/render/terminal');
 
 const TODAY = new Date(2026, 8, 12); // Saturday
 const days: Days = new Map();
@@ -50,6 +50,45 @@ describe('renderGrid (no colour)', () => {
 			'Fri   ',
 			'      '
 		]);
+	});
+});
+
+describe('renderBars (no colour)', () => {
+	// A fresh copy: `new Map(days)` would share the Day objects with the other tests.
+	const withCommits: Days = new Map();
+	for (const [key, aggregate] of days) day(withCommits, key).prompts = { ...aggregate.prompts };
+	day(withCommits, '2026-09-08').commits = 2;
+	day(withCommits, '2026-09-09').commits = 1;
+	const bars = (today: Date, weeks: number) =>
+		renderBars(
+			(['prompts', 'commits'] as const).map((metric) => [metric, buildGrid(withCommits, metric, 'all', weeks, today)]),
+			{ theme: 'dark' }
+		);
+
+	test('one bar per metric per day, its height the level, then a legend', () => {
+		// prompts levels 0,0,3,3,1,1,1 and commits 0,0,2,1,0,0,0 in the week of 09-06; · is level 0.
+		expect(bars(TODAY, 2)).toBe(
+			[
+				'        Sep',
+				'     ·· ··',
+				'Mon  ·· ··',
+				'     ·· ▆▄',
+				'Wed  ·· ▆▂',
+				'     ·· ▂·',
+				'Fri  ·· ▂·',
+				'     ·· ▂·',
+				'',
+				'    bars, left to right: prompts · commits'
+			].join('\n')
+		);
+	});
+
+	test('future days are left blank', () => {
+		expect(
+			bars(new Date(2026, 8, 10), 1)
+				.split('\n')
+				.slice(6, 8)
+		).toEqual(['Fri    ', '       ']);
 	});
 });
 

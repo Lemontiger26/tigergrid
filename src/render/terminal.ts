@@ -1,9 +1,13 @@
 import type { CellStyle, Grid, Metric, RenderOptions } from '../../types/grid';
-import { monthLabels, PALETTES } from '../grid';
+import { METRIC_LABEL, monthLabels, PALETTES } from '../grid';
 
 const color = process.stdout.isTTY && !process.env.NO_COLOR;
 const RESET = '\x1b[0m';
 const WEEKDAYS = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
+/** Bar glyphs for levels 0..4 in a combined graph: a grey baseline for 0, then rising blocks. */
+const BARS = ['▁', '▂', '▄', '▆', '█'];
+/** The same without colour, where a baseline would read as level 1. */
+const BARS_MONO = ['·', '▂', '▄', '▆', '█'];
 
 /**
  * Cell styles: the glyph drawn in colour, the shade characters used without colour (pipes,
@@ -78,18 +82,14 @@ function cell(metric: Metric, level: number, options: RenderOptions): string {
 }
 
 /**
- * Render the grid for the terminal: a month header, seven weekday rows (Sun..Sat, labelled Mon/Wed/Fri as on GitHub) with one
- * cell per week. Month labels that would collide with the next one are dropped;
- * future days are left blank. No legend: darker or brighter means more, as on GitHub.
+ * Build the month header line: each label above the first column of its month, dropped when
+ * the next label would start too soon to fit it.
  *
- * @returns the multi-line string, ready to print.
- * Called by: cli.
- * Calls: monthLabels, cell, cellWidth, dim.
+ * @returns the header text (not yet dimmed).
+ * Called by: renderGrid, renderBars.
+ * Calls: monthLabels.
  */
-export function renderGrid(grid: Grid, metric: Metric, options: RenderOptions): string {
-	const width = cellWidth(options.cells);
-	const lines: string[] = [];
-
+function monthHeader(grid: Grid, width: number): string {
 	const labels = [...monthLabels(grid)];
 	let header = '    ';
 	labels.forEach(([column, name], index) => {
@@ -98,7 +98,21 @@ export function renderGrid(grid: Grid, metric: Metric, options: RenderOptions): 
 		if ((next - column) * width < 4) return;
 		header = header.padEnd(4 + column * width) + ' ' + name;
 	});
-	lines.push(dim(header));
+	return header;
+}
+
+/**
+ * Render the grid for the terminal: a month header, seven weekday rows (Sun..Sat, labelled Mon/Wed/Fri as on GitHub) with one
+ * cell per week. Month labels that would collide with the next one are dropped;
+ * future days are left blank. No legend: darker or brighter means more, as on GitHub.
+ *
+ * @returns the multi-line string, ready to print.
+ * Called by: cli.
+ * Calls: monthHeader, cell, cellWidth, dim.
+ */
+export function renderGrid(grid: Grid, metric: Metric, options: RenderOptions): string {
+	const width = cellWidth(options.cells);
+	const lines: string[] = [dim(monthHeader(grid, width))];
 
 	for (let row = 0; row < 7; row++) {
 		let line = dim(WEEKDAYS[row]!.padEnd(4));
@@ -108,5 +122,52 @@ export function renderGrid(grid: Grid, metric: Metric, options: RenderOptions): 
 		}
 		lines.push(line);
 	}
+	return lines.join('\n');
+}
+
+/**
+ * Columns one week takes in a combined graph: one bar per metric, then a gap.
+ *
+ * @returns `metrics + 1`.
+ * Called by: cli, renderBars.
+ * Calls: nothing.
+ */
+export const barsWidth = (metrics: number): number => metrics + 1;
+
+/**
+ * Render several metrics as one terminal graph: the same month header and weekday rows as
+ * renderGrid, but each day is a run of bars, one per metric in the given order. A bar's height
+ * is that metric's level (quartiles over its own active days, so metrics on different scales
+ * compare) and its colour is the metric's; level 0 is a grey baseline. A legend line names the
+ * bars, since without colour only their order tells them apart. The grids must share a window.
+ *
+ * @returns the multi-line string, ready to print.
+ * Called by: cli.
+ * Calls: monthHeader, barsWidth, fg, dim.
+ */
+export function renderBars(grids: [Metric, Grid][], options: Pick<RenderOptions, 'theme'>): string {
+	const [first] = grids;
+	if (!first) return '';
+	const lines: string[] = [dim(monthHeader(first[1], barsWidth(grids.length)))];
+	/** One metric's bar for one day. Called by: renderBars. Calls: fg. */
+	const bar = (metric: Metric, level: number) => {
+		if (!color) return BARS_MONO[level]!;
+		const ramp = PALETTES[metric][options.theme];
+		return fg(level ? ramp[4]! : ramp[0]!, BARS[level]!);
+	};
+
+	for (let row = 0; row < 7; row++) {
+		let line = dim(WEEKDAYS[row]!.padEnd(4));
+		first[1].weeks.forEach((_, week) => {
+			const future = first[1].weeks[week]![row]!.future;
+			line += ' ' + grids.map(([metric, grid]) => (future ? ' ' : bar(metric, grid.weeks[week]![row]!.level))).join('');
+		});
+		lines.push(line);
+	}
+
+	const legend = color
+		? grids.map(([metric]) => `${fg(PALETTES[metric][options.theme][4]!, '█')} ${dim(METRIC_LABEL[metric])}`).join('  ')
+		: dim(`bars, left to right: ${grids.map(([metric]) => METRIC_LABEL[metric]).join(' · ')}`);
+	lines.push('', `    ${legend}`);
 	return lines.join('\n');
 }

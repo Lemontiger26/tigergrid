@@ -9,7 +9,7 @@ import type { CellStyle, Grid, Metric, Summary, TerminalTheme, ToolFilter } from
 import { dayKey } from './days';
 import { buildGrid, fmt, gridStart, isMetric, isToolFilter, METRIC_LABEL, summarize } from './grid';
 import { renderSvg } from './render/svg';
-import { bold, cellWidth, dim, isCellStyle, renderGrid } from './render/terminal';
+import { barsWidth, bold, cellWidth, dim, isCellStyle, renderBars, renderGrid } from './render/terminal';
 import { detectTheme, isTerminalTheme } from './render/theme';
 import { loadClaude } from './sources/claude';
 import { loadCodex } from './sources/codex';
@@ -21,6 +21,7 @@ const HELP = `TigerGrid — a contribution graph of your AI coding agents
 Usage: tigergrid [options]
 
   -m, --metric <name>   prompts | sessions | tokens | commits | ai   (default: prompts)
+                        or a comma list (prompts,sessions,ai) for one combined graph
   -t, --tool <name>     claude | codex | all                          (default: all)
   -w, --weeks <n>       weeks to show (default: fit terminal, max 53)
   -r, --git-root <dir>  where to look for git repos, repeatable      (default: ~/develop)
@@ -37,7 +38,8 @@ Usage: tigergrid [options]
 
 Sources: Claude Code transcripts, Codex rollouts, and git repos under --git-root.
 "tokens" counts fresh tokens (uncached input + cache writes + output); cache reads are excluded.
-"ai" counts commits carrying an agent Co-Authored-By trailer or a "Generated with" footer.`;
+"ai" counts commits carrying an agent Co-Authored-By trailer or a "Generated with" footer.
+A combined graph draws one bar per metric per day; its height is that metric's level.`;
 
 const TOOL_LABEL: Record<ToolFilter, string> = { all: 'Claude Code + Codex', claude: 'Claude Code', codex: 'Codex' };
 
@@ -141,15 +143,15 @@ const daysInView = (days: Days, grid: Grid): Day[] =>
 	[...days.entries()].filter(([key]) => key >= grid.start && key <= grid.end).map(([, day]) => day);
 
 /**
- * Print the stats block under the graph: streaks and busiest day for the chosen metric,
- * then window totals for every source regardless of metric (sessions/prompts/tokens per tool,
+ * Print the stats block under the graph: streaks and busiest day for the chosen metric (one
+ * line of active days and streaks per metric for a combined graph), then window totals for every source regardless of metric (sessions/prompts/tokens per tool,
  * commits and the AI-assisted share) and the top five projects by prompts.
  *
  * @returns nothing; writes to stdout.
  * Called by: main.
  * Calls: daysInView, fmt, dim; the local helpers row, sum and sessions.
  */
-function printSummary(days: Days, grid: Grid, summary: Summary, filter: ToolFilter, withGit: boolean) {
+function printSummary(days: Days, grid: Grid, summaries: [Metric, Summary][], filter: ToolFilter, withGit: boolean) {
 	const inView = daysInView(days, grid);
 	/** Sum a per-day quantity over the visible window. Called by: printSummary. Calls: nothing. */
 	const sum = (pick: (day: Day) => number) => inView.reduce((total, day) => total + pick(day), 0);
@@ -158,9 +160,20 @@ function printSummary(days: Days, grid: Grid, summary: Summary, filter: ToolFilt
 	/** Print one aligned `label  value` line. Called by: printSummary. Calls: dim. */
 	const row = (label: string, text: string) => console.log(`  ${dim(label.padEnd(16))}${text}`);
 
-	row('active days', `${summary.activeDays} / ${summary.totalDays}`);
-	row('streak', `${summary.currentStreak}d current · ${summary.longestStreak}d longest`);
-	if (summary.busiest) row('busiest day', `${summary.busiest.key} (${fmt(summary.busiest.value)})`);
+	const [only, ...more] = summaries;
+	if (only && !more.length) {
+		const [, summary] = only;
+		row('active days', `${summary.activeDays} / ${summary.totalDays}`);
+		row('streak', `${summary.currentStreak}d current · ${summary.longestStreak}d longest`);
+		if (summary.busiest) row('busiest day', `${summary.busiest.key} (${fmt(summary.busiest.value)})`);
+	} else {
+		for (const [metric, summary] of summaries) {
+			row(
+				metric,
+				`${summary.activeDays} / ${summary.totalDays} active days · ${summary.currentStreak}d current · ${summary.longestStreak}d longest streak`
+			);
+		}
+	}
 	console.log();
 	for (const tool of ['claude', 'codex'] as const) {
 		if (filter !== 'all' && filter !== tool) continue;
@@ -192,8 +205,8 @@ function printSummary(days: Days, grid: Grid, summary: Summary, filter: ToolFilt
  *
  * @returns resolves when output is written; exits early on `--help`, bad flags, or `--json`.
  * Called by: module top level.
- * Calls: versionLine, die, isMetric, isToolFilter, isCellStyle, isTerminalTheme, cellWidth, detectTheme, gitAuthors, loadClaude, loadCodex, loadGit, printJson,
- *        buildGrid, summarize, renderGrid, printSummary, renderSvg.
+ * Calls: versionLine, die, isMetric, isToolFilter, isCellStyle, isTerminalTheme, cellWidth, barsWidth, detectTheme, gitAuthors, loadClaude, loadCodex,
+ *        loadGit, printJson, buildGrid, summarize, renderGrid, renderBars, printSummary, renderSvg.
  */
 async function main() {
 	if (args.version) {
@@ -204,15 +217,23 @@ async function main() {
 		console.log(HELP);
 		process.exit(0);
 	}
-	if (!isMetric(args.metric)) die(`unknown metric "${args.metric}"`);
+	const metrics: Metric[] = [];
+	for (const name of args.metric.split(',').map((part) => part.trim())) {
+		if (!isMetric(name)) die(`unknown metric "${name}"`);
+		if (!metrics.includes(name)) metrics.push(name);
+	}
+	const [metric] = metrics;
+	if (!metric) die('--metric needs at least one metric');
+	const combined = metrics.length > 1;
+	if (combined && args.svg) die('--svg takes a single metric');
 	if (!isToolFilter(args.tool)) die(`unknown tool "${args.tool}"`);
-	const metric: Metric = args.metric;
 	const filter: ToolFilter = args.tool;
 	if (!isCellStyle(args.cells)) die(`unknown cell style "${args.cells}"`);
 	const cells: CellStyle = args.cells;
 	if (args.theme !== undefined && !isTerminalTheme(args.theme)) die(`unknown theme "${args.theme}"`);
 
-	const fitWeeks = Math.floor(((process.stdout.columns || 110) - 6) / cellWidth(cells));
+	const weekWidth = combined ? barsWidth(metrics.length) : cellWidth(cells);
+	const fitWeeks = Math.floor(((process.stdout.columns || 110) - 6) / weekWidth);
 	const weeks = args.weeks ? Number(args.weeks) : Math.max(4, Math.min(53, fitWeeks));
 	if (!Number.isInteger(weeks) || weeks < 1) die(`--weeks must be a positive integer`);
 
@@ -234,27 +255,30 @@ async function main() {
 		return;
 	}
 
-	const grid = buildGrid(days, metric, filter, weeks);
-	const summary = summarize(grid);
-	const isGitMetric = metric === 'commits' || metric === 'ai';
-	const scope = isGitMetric ? 'git' : TOOL_LABEL[filter];
+	const grids = metrics.map((each): [Metric, Grid] => [each, buildGrid(days, each, filter, weeks)]);
+	const summaries = grids.map(([each, grid]): [Metric, Summary] => [each, summarize(grid)]);
+	const grid = grids[0]![1];
+	const summary = summaries[0]![1];
+	const isGitMetric = (each: Metric) => each === 'commits' || each === 'ai';
+	const gitOnly = metrics.every(isGitMetric);
+	const agentScope = metrics.some(isGitMetric) ? `${TOOL_LABEL[filter]} + git` : TOOL_LABEL[filter];
+	const scope = gitOnly ? 'git' : agentScope;
 
+	const totals = summaries.map(([each, { total }]) => `${fmt(total)} ${METRIC_LABEL[each]}`).join(' · ');
 	console.log();
-	console.log(
-		`  ${bold(`${fmt(summary.total)} ${METRIC_LABEL[metric]}`)} ${dim(`in the last ${weeks} weeks · ${scope}`)}`
-	);
+	console.log(`  ${bold(totals)} ${dim(`in the last ${weeks} weeks · ${scope}`)}`);
 	console.log();
 	// Only ask the terminal for its background when the grid is actually drawn.
 	const theme: TerminalTheme = args.theme ?? (await detectTheme());
-	console.log(renderGrid(grid, metric, { cells, theme }));
+	console.log(combined ? renderBars(grids, { theme }) : renderGrid(grid, metric, { cells, theme }));
 	console.log();
-	printSummary(days, grid, summary, filter, withGit);
+	printSummary(days, grid, summaries, filter, withGit);
 	console.log();
 	console.log(dim(`  scanned ${claudeFiles} Claude + ${codexFiles} Codex transcripts, ${repos} repos in ${elapsed}s`));
 
 	if (args.svg) {
 		const path = resolve(args.svg);
-		const title = isGitMetric ? 'Git activity' : `Agent activity · ${scope}`;
+		const title = gitOnly ? 'Git activity' : `Agent activity · ${scope}`;
 		await mkdir(dirname(path), { recursive: true });
 		await writeFile(path, renderSvg(grid, metric, summary, title, { cells }));
 		console.log(dim(`  wrote ${path}`));

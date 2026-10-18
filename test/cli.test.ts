@@ -144,6 +144,25 @@ describe('argument errors', () => {
 		expect(grid.find((line) => line.startsWith('Mon '))).toHaveLength(4 + 8 * 2);
 	});
 
+	test('a comma list of metrics draws one combined graph: a bar per metric and a gap per week', () => {
+		const result = cli('-m', 'prompts,sessions,ai', '-w', '8', ...FIXTURE_ARGS.slice(2));
+		expect(result.code).toBe(0);
+		const lines = result.stdout.split('\n');
+		expect(lines.find((line) => line.startsWith('Mon '))).toHaveLength(4 + 8 * 4);
+		expect(result.stdout).toContain('bars, left to right: prompts · agent sessions · AI-assisted commits');
+		expect(result.stdout).toContain('Claude Code + Codex + git');
+		for (const metric of ['prompts', 'sessions', 'ai']) {
+			expect(lines.some((line) => line.trimStart().startsWith(`${metric} `))).toBe(true);
+		}
+	});
+
+	test('a combined graph rejects unknown metrics and --svg', () => {
+		expect(cli('-m', 'prompts,vibes').stderr).toContain('tigergrid: unknown metric "vibes"');
+		expect(cli('-m', 'prompts,ai', '--svg', join(out, 'combined.svg')).stderr).toContain(
+			'tigergrid: --svg takes a single metric'
+		);
+	});
+
 	test('errors go to stderr alone, the usage text to stdout', () => {
 		const result = cli('-m', 'vibes');
 		expect(result.stderr.trim()).toBe('tigergrid: unknown metric "vibes"');
