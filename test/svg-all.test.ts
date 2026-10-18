@@ -3,7 +3,8 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// `bun run svg:all` = scripts/svg-all.ts: one SVG per metric, extra flags passed to every run.
+// `bun run svg:all` = scripts/svg-all.ts: one SVG per metric (or per -m metric, plus their
+// combined graph), extra flags passed to every run.
 const FIXTURES = ['--no-git', '--claude-dir', 'test/fixtures/claude', '--codex-dir', 'test/fixtures/codex'];
 const METRIC_FILES = ['ai', 'commits', 'prompts', 'sessions', 'tokens'].map((metric) => `tigergrid-${metric}.svg`);
 let dir = '';
@@ -52,13 +53,40 @@ describe('svg:all', () => {
 		expect(svg('tigergrid-prompts.svg')).toContain('width="192"');
 	});
 
-	test.each(['-m', '--metric', '--metric=tokens', '--svg', '--json'])(
-		'rejects %s, which it sets per metric, and writes nothing',
-		(flag) => {
-			const result = svgAll(flag, 'x', ...FIXTURES);
-			expect(result.code).toBe(1);
-			expect(result.stderr).toContain(`svg:all sets ${flag.split('=')[0]} itself for each metric`);
-			expect(existsSync(dir) ? readdirSync(dir) : []).toEqual([]);
-		}
-	);
+	test('-m limits the run to the listed metrics and adds their combined graph', () => {
+		const result = svgAll('-m', 'prompts,sessions,tokens', ...FIXTURES);
+		expect(result.code).toBe(0);
+		expect(readdirSync(dir).sort()).toEqual([
+			'tigergrid-prompts-sessions-tokens.svg',
+			'tigergrid-prompts.svg',
+			'tigergrid-sessions.svg',
+			'tigergrid-tokens.svg'
+		]);
+		expect(svg('tigergrid-prompts-sessions-tokens.svg')).toContain(
+			'<title>2026-09-08: 2 prompts · 1 agent sessions · 1,400 tokens</title>'
+		);
+		expect(svg('tigergrid-tokens.svg')).toContain('<title>2026-09-08: 1,400 tokens</title>');
+	});
+
+	test.each([
+		['--metric=tokens', ['tigergrid-tokens.svg']],
+		['-mai,ai', ['tigergrid-ai.svg']]
+	])('%s: one metric, so no combined graph', (flag, files) => {
+		expect(svgAll(flag, ...FIXTURES).code).toBe(0);
+		expect(readdirSync(dir)).toEqual(files);
+	});
+
+	test('an unknown metric fails before anything is written', () => {
+		const result = svgAll('--metric', 'prompts,vibes', ...FIXTURES);
+		expect(result.code).toBe(1);
+		expect(result.stderr).toContain('svg:all: unknown metric "vibes"');
+		expect(existsSync(dir) ? readdirSync(dir) : []).toEqual([]);
+	});
+
+	test.each(['--svg', '--json'])('rejects %s, which it sets per run, and writes nothing', (flag) => {
+		const result = svgAll(flag, 'x', ...FIXTURES);
+		expect(result.code).toBe(1);
+		expect(result.stderr).toContain(`svg:all: ${flag} is set per run`);
+		expect(existsSync(dir) ? readdirSync(dir) : []).toEqual([]);
+	});
 });
