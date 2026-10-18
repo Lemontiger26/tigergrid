@@ -27,7 +27,7 @@ export interface Cell {
 }
 
 export interface Grid {
-	/** Week columns, each Monday..Sunday. */
+	/** Week columns, each Sunday..Saturday. */
 	weeks: Cell[][];
 	start: string;
 	end: string;

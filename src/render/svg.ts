@@ -104,7 +104,7 @@ export function renderSvg(
 		parts.push(`<text x="${LEFT + column * STEP_X + shape.offsetX}" y="${TOP - 6}">${name}</text>`);
 	});
 	['Mon', 'Wed', 'Fri'].forEach((weekday, index) =>
-		parts.push(`<text x="${PAD}" y="${baseline(TOP + index * 2 * STEP_Y)}">${weekday}</text>`)
+		parts.push(`<text x="${PAD}" y="${baseline(TOP + (1 + index * 2) * STEP_Y)}">${weekday}</text>`)
 	);
 
 	grid.weeks.forEach((column, week) =>

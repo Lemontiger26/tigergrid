@@ -116,7 +116,8 @@ export function value(aggregate: Day | undefined, metric: Metric, filter: ToolFi
 const addDays = (date: Date, count: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + count);
 
 /**
- * Find the Monday that starts a grid of `weeks` columns ending with the current week.
+ * Find the Sunday that starts a grid of `weeks` columns ending with the current week (weeks
+ * run Sunday..Saturday, as on GitHub).
  * The CLI also uses it as the lower bound for what the sources load.
  *
  * @returns the first (top-left) date of the grid.
@@ -124,8 +125,7 @@ const addDays = (date: Date, count: number) => new Date(date.getFullYear(), date
  * Calls: addDays.
  */
 export function gridStart(weeks: number, today = new Date()): Date {
-	const mondayOffset = (today.getDay() + 6) % 7;
-	return addDays(today, -mondayOffset - (weeks - 1) * 7);
+	return addDays(today, -today.getDay() - (weeks - 1) * 7);
 }
 
 /**
@@ -144,7 +144,7 @@ function levelOf(cellValue: number, [q1, q2, q3]: [number, number, number]): num
 }
 
 /**
- * Lay the aggregated days out as week columns (Mon..Sun), read the chosen metric for each
+ * Lay the aggregated days out as week columns (Sun..Sat), read the chosen metric for each
  * cell, and assign colour levels GitHub-style: quartiles over the active days in view, so
  * levels are relative to your own activity. Days after today are marked `future`.
  *
@@ -227,7 +227,7 @@ export function fmt(count: number): string {
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /**
- * Work out where month labels go above the grid: on each column whose Monday falls in a
+ * Work out where month labels go above the grid: on each column whose Sunday falls in a
  * different month than the previous column's.
  *
  * @returns a map of column index → short month name, in column order.

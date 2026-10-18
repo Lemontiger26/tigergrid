@@ -22,26 +22,34 @@ for (const [key, count] of Object.entries({
 const grid = buildGrid(days, 'prompts', 'all', 2, TODAY);
 
 describe('renderGrid (no colour)', () => {
-	// Weeks of 08-31 and 09-07. "Aug" is dropped (no room before "Sep"); Sunday 09-13 is still in the future.
+	// Weeks of Sun 08-30 and Sun 09-06, rows Sun..Sat. "Aug" is dropped (no room before "Sep").
 	test('wide: three columns per week, gaps between days and weeks', () => {
 		expect(renderGrid(grid, 'prompts', { cells: 'wide', theme: 'light' })).toBe(
 			[
 				'        Sep',
+				'     ·  · ',
 				'Mon  ·  · ',
 				'     · ▓▓ ',
 				'Wed  · ▓▓ ',
 				'     · ░░ ',
 				'Fri  · ░░ ',
-				'     · ░░ ',
-				'     ·    '
+				'     · ░░ '
 			].join('\n')
 		);
 	});
 
 	test('matrix (default): two columns per week, no legend', () => {
 		expect(renderGrid(grid, 'prompts', { cells: 'matrix', theme: 'dark' })).toBe(
-			['       Sep', 'Mon  · ·', '     · ▓', 'Wed  · ▓', '     · ░', 'Fri  · ░', '     · ░', '     ·  '].join('\n')
+			['       Sep', '     · ·', 'Mon  · ·', '     · ▓', 'Wed  · ▓', '     · ░', 'Fri  · ░', '     · ░'].join('\n')
 		);
+	});
+
+	test('future days are left blank', () => {
+		const thursday = buildGrid(days, 'prompts', 'all', 1, new Date(2026, 8, 10));
+		expect(renderGrid(thursday, 'prompts', { cells: 'matrix', theme: 'dark' }).split('\n').slice(-2)).toEqual([
+			'Fri   ',
+			'      '
+		]);
 	});
 });
 
@@ -56,7 +64,7 @@ describe('renderSvg', () => {
 
 	test('draws one cell per past day plus five legend swatches', () => {
 		const cells = svg.match(/<rect class="l\d"/g) ?? [];
-		expect(cells).toHaveLength(13 + 5);
+		expect(cells).toHaveLength(14 + 5);
 	});
 
 	test('gives each day a tooltip', () => {
@@ -79,18 +87,18 @@ describe('renderSvg cell styles', () => {
 	test('matrix (default): square-cornered bars that join within a week, monospace text', () => {
 		const svg = render();
 		expect(svg).toBe(render('matrix'));
-		// 09-08 sits in the second week (x 50 + 14 + offset 3) on Tuesday (y 80 + 14), 11 × 14 px, no rx
-		expect(svg).toContain('<rect class="l3" x="67" y="94" width="11" height="14"><title>2026-09-08');
+		// 09-08 sits in the second week (x 50 + 14 + offset 3) on Tuesday (y 80 + 2 × 14), 11 × 14 px, no rx
+		expect(svg).toContain('<rect class="l3" x="67" y="108" width="11" height="14"><title>2026-09-08');
 		// the next day starts exactly where this one ends: no gap between days
-		expect(svg).toContain('<rect class="l3" x="67" y="108" width="11" height="14"><title>2026-09-09');
+		expect(svg).toContain('<rect class="l3" x="67" y="122" width="11" height="14"><title>2026-09-09');
 		expect(svg).toContain('ui-monospace');
 		expect(svg).not.toContain(' rx="3"');
 	});
 
 	test('wide: rounded squares with gaps both ways, sans-serif text', () => {
 		const svg = render('wide');
-		expect(svg).toContain('<rect class="l3" x="64" y="94" width="11" height="11" rx="3"><title>2026-09-08');
-		expect(svg).toContain('<rect class="l3" x="64" y="108" width="11" height="11" rx="3"><title>2026-09-09');
+		expect(svg).toContain('<rect class="l3" x="64" y="108" width="11" height="11" rx="3"><title>2026-09-08');
+		expect(svg).toContain('<rect class="l3" x="64" y="122" width="11" height="11" rx="3"><title>2026-09-09');
 		expect(svg).toContain('Inter,');
 		expect(svg).not.toContain('ui-monospace');
 	});

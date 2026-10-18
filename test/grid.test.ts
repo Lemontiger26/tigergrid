@@ -3,7 +3,7 @@ import type { Days } from '../types/days';
 import { day } from '../src/days';
 import { buildGrid, fmt, gridStart, monthLabels, PALETTES, summarize, value } from '../src/grid';
 
-// Fixture week: Mon 2026-09-07 .. Sun 2026-09-13. "Today" is Saturday 2026-09-12.
+// Grid week: Sun 2026-09-06 .. Sat 2026-09-12, as on GitHub. "Today" is Saturday 2026-09-12.
 const TODAY = new Date(2026, 8, 12);
 
 /** Build a Days map from `{ "YYYY-MM-DD": promptCount }`, all as Claude prompts. */
@@ -42,39 +42,44 @@ describe('value', () => {
 });
 
 describe('gridStart', () => {
-	test('starts on the Monday `weeks - 1` weeks before the current week', () => {
-		expect(gridStart(1, TODAY)).toEqual(new Date(2026, 8, 7));
-		expect(gridStart(2, TODAY)).toEqual(new Date(2026, 7, 31));
+	test('starts on the Sunday `weeks - 1` weeks before the current week', () => {
+		expect(gridStart(1, TODAY)).toEqual(new Date(2026, 8, 6));
+		expect(gridStart(2, TODAY)).toEqual(new Date(2026, 7, 30));
 	});
 
-	test('a Sunday still belongs to the week that started the Monday before', () => {
-		expect(gridStart(1, new Date(2026, 8, 13))).toEqual(new Date(2026, 8, 7));
+	test('a Sunday starts a new week', () => {
+		expect(gridStart(1, new Date(2026, 8, 13))).toEqual(new Date(2026, 8, 13));
 	});
 });
 
 describe('buildGrid', () => {
 	const grid = buildGrid(promptDays(FIXTURE_PROMPTS), 'prompts', 'all', 2, TODAY);
 
-	test('has one column per week, Monday to Sunday', () => {
+	test('has one column per week, Sunday to Saturday', () => {
 		expect(grid.weeks).toHaveLength(2);
 		expect(grid.weeks.map((col) => col.map((cell) => cell.key))).toEqual([
-			['2026-08-31', '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05', '2026-09-06'],
-			['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13']
+			['2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05'],
+			['2026-09-06', '2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12']
 		]);
-		expect(grid.start).toBe('2026-08-31');
+		expect(grid.start).toBe('2026-08-30');
 		expect(grid.end).toBe('2026-09-12');
 	});
 
 	test('marks days after today as future', () => {
-		expect(grid.weeks[1]!.filter((cell) => cell.future).map((cell) => cell.key)).toEqual(['2026-09-13']);
+		expect(grid.weeks[1]!.some((cell) => cell.future)).toBe(false); // Saturday ends the week
+		const thursday = buildGrid(promptDays(FIXTURE_PROMPTS), 'prompts', 'all', 1, new Date(2026, 8, 10));
+		expect(thursday.weeks[0]!.filter((cell) => cell.future).map((cell) => cell.key)).toEqual([
+			'2026-09-11',
+			'2026-09-12'
+		]);
 	});
 
 	test('reads the metric into each cell', () => {
-		expect(grid.weeks[1]!.map((cell) => cell.value)).toEqual([0, 2, 2, 1, 1, 1, 0]);
+		expect(grid.weeks[1]!.map((cell) => cell.value)).toEqual([0, 0, 2, 2, 1, 1, 1]);
 	});
 
 	test('levels are quartiles over active days: [1,1,1,2,2] puts 1 at level 1 and 2 at level 3', () => {
-		expect(grid.weeks[1]!.map((cell) => cell.level)).toEqual([0, 3, 3, 1, 1, 1, 0]);
+		expect(grid.weeks[1]!.map((cell) => cell.level)).toEqual([0, 0, 3, 3, 1, 1, 1]);
 	});
 
 	test('a wide spread uses all four levels', () => {
@@ -93,14 +98,14 @@ describe('buildGrid', () => {
 			TODAY
 		);
 		// sorted [1,2,3,4,5,100] → q1 = 2, q2 = 4, q3 = 5
-		expect(spread.weeks[0]!.map((cell) => cell.level)).toEqual([1, 1, 2, 2, 3, 4, 0]);
+		expect(spread.weeks[0]!.map((cell) => cell.level)).toEqual([0, 1, 1, 2, 2, 3, 4]);
 	});
 });
 
 describe('summarize', () => {
 	test('totals, active days, streaks and busiest day for the fixture week', () => {
 		const summary = summarize(buildGrid(promptDays(FIXTURE_PROMPTS), 'prompts', 'all', 2, TODAY));
-		expect(summary).toMatchObject({ total: 7, activeDays: 5, totalDays: 13, currentStreak: 5, longestStreak: 5 });
+		expect(summary).toMatchObject({ total: 7, activeDays: 5, totalDays: 14, currentStreak: 5, longestStreak: 5 });
 		expect(summary.busiest?.key).toBe('2026-09-08'); // ties go to the earlier day
 	});
 
@@ -132,7 +137,7 @@ describe('fmt', () => {
 describe('monthLabels', () => {
 	test('labels the first column of each month', () => {
 		const grid = buildGrid(new Map(), 'prompts', 'all', 6, TODAY);
-		// Columns start Mon 08-03, 08-10, 08-17, 08-24, 08-31, 09-07: 08-31 is still August.
+		// Columns start Sun 08-02, 08-09, 08-16, 08-23, 08-30, 09-06: 08-30 is still August.
 		expect([...monthLabels(grid)]).toEqual([
 			[0, 'Aug'],
 			[5, 'Sep']

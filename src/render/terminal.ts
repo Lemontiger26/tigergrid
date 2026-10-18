@@ -3,7 +3,7 @@ import { monthLabels, PALETTES } from '../grid';
 
 const color = process.stdout.isTTY && !process.env.NO_COLOR;
 const RESET = '\x1b[0m';
-const WEEKDAYS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
+const WEEKDAYS = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
 
 /**
  * Cell styles: the glyph drawn in colour, the shade characters used without colour (pipes,
@@ -78,7 +78,7 @@ function cell(metric: Metric, level: number, options: RenderOptions): string {
 }
 
 /**
- * Render the grid for the terminal: a month header, seven weekday rows (Mon..Sun) with one
+ * Render the grid for the terminal: a month header, seven weekday rows (Sun..Sat, labelled Mon/Wed/Fri as on GitHub) with one
  * cell per week. Month labels that would collide with the next one are dropped;
  * future days are left blank. No legend: darker or brighter means more, as on GitHub.
  *
