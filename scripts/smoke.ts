@@ -83,20 +83,43 @@ function dockerAvailable(): boolean {
 }
 
 /**
- * Decide how to run a target's binary on this machine: directly when OS and CPU match the
- * host; in a Linux container of the target's architecture when Docker is available (repo
- * mounted read-only at /work, OUT_DIR writable at /out); otherwise not at all.
+ * Check that Docker can actually execute binaries of a platform. Pulling a foreign-arch image
+ * always works, but running it needs a binfmt_misc handler on the host (qemu-user-binfmt, which
+ * replaced qemu-user-static on current Debian/Ubuntu, or Rosetta / QEMU built into Docker
+ * Desktop); without one every command fails with `exec format error`.
  *
- * @returns how to invoke the binary and where it should write files, or null to skip.
- * Called by: module top level.
- * Calls: nothing.
+ * @returns null if a trivial command runs in LINUX_IMAGE on that platform, otherwise why not.
+ * Called by: runner.
+ * Calls: exec.
  */
-function runner(target: Target, docker: boolean): Runner | null {
+function dockerCanRun(platform: string): string | null {
+	const probe = exec(['docker', 'run', '--rm', `--platform=${platform}`, LINUX_IMAGE, 'true']);
+	if (probe.code === 0) return null;
+	if (probe.stderr.includes('exec format error')) {
+		return `Docker has no ${platform} emulation (install qemu-user-binfmt, or run docker run --privileged --rm tonistiigi/binfmt --install all)`;
+	}
+	return `docker run --platform=${platform} failed: ${probe.stderr.trim()}`;
+}
+
+/**
+ * Decide how to run a target's binary on this machine: directly when OS and CPU match the
+ * host; in a Linux container of the target's architecture when Docker is available and can
+ * execute that architecture (repo mounted read-only at /work, OUT_DIR writable at /out);
+ * otherwise not at all.
+ *
+ * @returns how to invoke the binary and where it should write files, or why it can't run here.
+ * Called by: module top level.
+ * Calls: dockerCanRun.
+ */
+function runner(target: Target, docker: boolean): Runner | string {
 	if (target.os === process.platform && target.arch === process.arch) {
 		return { how: 'native', wrap: (args) => args, outPath: (name) => join(OUT_DIR, name) };
 	}
-	if (target.os !== 'linux' || !docker) return null;
+	if (target.os !== 'linux') return `can't run ${target.os} binaries here`;
+	if (!docker) return "can't run this architecture here without Docker";
 	const platform = DOCKER_PLATFORM[target.arch];
+	const problem = dockerCanRun(platform);
+	if (problem) return problem;
 	return {
 		how: `docker ${platform}`,
 		wrap: (args) => [
@@ -225,10 +248,10 @@ const outcomes: Outcome[] = [];
 for (const target of targets) {
 	const binary = `dist/tigergrid-${target.name.replace(/^bun-/, '')}`;
 	const run = runner(target, docker);
-	if (!run) {
+	if (typeof run === 'string') {
 		// Skipping is fine for a full local run, but a target asked for by name (as in CI) must run.
 		const ok = requested.length === 0;
-		const detail = `can't run ${target.os} binaries here${ok ? '' : ', but it was requested'}`;
+		const detail = `${run}${ok ? '' : ', but it was requested'}`;
 		outcomes.push({ target: target.name, how: 'skipped', ok, detail });
 		continue;
 	}
