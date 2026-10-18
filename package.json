@@ -5,16 +5,26 @@
 	"license": "Apache-2.0",
 	"type": "module",
 	"bin": {
-		"tigergrid": "src/cli.ts"
+		"tigergrid": "dist/node/cli.js"
 	},
+	"engines": {
+		"node": ">=22.17.0"
+	},
+	"files": [
+		"dist/node",
+		"LICENSE"
+	],
 	"scripts": {
 		"start": "bun src/cli.ts",
 		"build": "bun scripts/build.ts",
+		"build:node": "bun build src/cli.ts --target=node --outfile=dist/node/cli.js",
+		"prepack": "bun run build:node",
 		"smoke": "bun scripts/smoke.ts",
 		"svg": "mkdir -p out && bun src/cli.ts -w 53 --svg out/tigergrid.svg",
 		"svg:all": "bun scripts/svg-all.ts",
 		"json": "mkdir -p out && bun src/cli.ts -w 53 --json > out/tigergrid.json",
 		"test": "bun test",
+		"test:node": "bun run build:node && TIGERGRID_TEST_NODE=1 bun test test/cli.test.ts",
 		"check": "tsc --noEmit",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",

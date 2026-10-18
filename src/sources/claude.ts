@@ -1,5 +1,5 @@
-import { Glob } from 'bun';
 import { existsSync } from 'node:fs';
+import { glob } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Days } from '../../types/days';
@@ -43,9 +43,10 @@ export async function loadClaude(days: Days, since: string, root = CLAUDE_PROJEC
 	if (!existsSync(root)) return 0;
 	const seenMessages = new Set<string>();
 	let files = 0;
-	for await (const relativePath of new Glob('**/*.jsonl').scan({ cwd: root, onlyFiles: true })) {
+	for await (const entry of glob('**/*.jsonl', { cwd: root, withFileTypes: true })) {
+		if (!entry.isFile()) continue;
 		files++;
-		for await (const raw of readJsonl(join(root, relativePath))) {
+		for await (const raw of readJsonl(join(entry.parentPath, entry.name))) {
 			const record = asObject(raw);
 			const key = keyOfTimestamp(asString(record.timestamp));
 			if (!key || key < since) continue;

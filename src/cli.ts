@@ -1,6 +1,7 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
+import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { JsonDay } from '../types/cli';
 import type { Day, Days, Tool } from '../types/days';
@@ -12,7 +13,7 @@ import { bold, cellWidth, dim, isCellStyle, renderGrid } from './render/terminal
 import { detectTheme, isTerminalTheme } from './render/theme';
 import { loadClaude } from './sources/claude';
 import { loadCodex } from './sources/codex';
-import { loadGit } from './sources/git';
+import { gitOutput, loadGit } from './sources/git';
 import pkg from '../package.json';
 
 const HELP = `TigerGrid — a contribution graph of your AI coding agents
@@ -90,12 +91,11 @@ function die(message: string): never {
  *
  * @returns author patterns for `git log --author`.
  * Called by: main.
- * Calls: Bun.spawn (git config).
+ * Calls: gitOutput (git config).
  */
 async function gitAuthors(): Promise<string[]> {
 	if (args.author?.length) return args.author;
-	const proc = Bun.spawn(['git', 'config', 'user.email'], { stdout: 'pipe' });
-	const email = (await new Response(proc.stdout).text()).trim();
+	const email = (await gitOutput(process.cwd(), ['config', 'user.email'])).trim();
 	return email ? [email] : [];
 }
 
@@ -255,7 +255,8 @@ async function main() {
 	if (args.svg) {
 		const path = resolve(args.svg);
 		const title = isGitMetric ? 'Git activity' : `Agent activity · ${scope}`;
-		await Bun.write(path, renderSvg(grid, metric, summary, title, { cells }));
+		await mkdir(dirname(path), { recursive: true });
+		await writeFile(path, renderSvg(grid, metric, summary, title, { cells }));
 		console.log(dim(`  wrote ${path}`));
 	}
 	console.log();

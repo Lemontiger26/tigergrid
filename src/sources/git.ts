@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { existsSync, type Dirent } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -39,14 +40,21 @@ async function findRepos(dir: string, maxDepth: number): Promise<string[]> {
  * Run a git command against `repo`, discarding stderr (repos without commits just print nothing).
  *
  * @returns git's stdout as text.
- * Called by: loadGit.
- * Calls: Bun.spawn (git).
+ * Called by: loadGit, cli.gitAuthors.
+ * Calls: spawn (git).
  */
-async function git(repo: string, args: string[]): Promise<string> {
-	const proc = Bun.spawn(['git', '-C', repo, ...args], { stdout: 'pipe', stderr: 'ignore' });
-	const out = await new Response(proc.stdout).text();
-	await proc.exited;
-	return out;
+export function gitOutput(repo: string, args: string[]): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const proc = spawn('git', ['-C', repo, ...args], { stdio: ['ignore', 'pipe', 'ignore'] });
+		let output = '';
+		proc.stdout.setEncoding('utf8');
+		proc.stdout.on('data', (chunk: string) => {
+			output += chunk;
+		});
+		proc.on('error', reject);
+		// Non-zero exits (empty repos or absent config keys) still return their stdout.
+		proc.on('close', () => resolve(output));
+	});
 }
 
 /**
@@ -57,7 +65,7 @@ async function git(repo: string, args: string[]): Promise<string> {
  *
  * @returns the number of repositories scanned; mutates `days` (commits, aiCommits).
  * Called by: cli, tests.
- * Calls: findRepos, git, keyOfTimestamp, day.
+ * Calls: findRepos, gitOutput, keyOfTimestamp, day.
  */
 export async function loadGit(days: Days, since: string, roots: string[], authors: string[]): Promise<number> {
 	const seen = new Set<string>();
@@ -68,7 +76,13 @@ export async function loadGit(days: Days, since: string, roots: string[], author
 		repos.map(async (repo) => {
 			// Every branch, remote and tag, but not refs/stash: stash entries are commits too.
 			const refs = ['--branches', '--remotes', '--tags'];
-			const out = await git(repo, ['log', ...refs, `--since=${since}`, ...authorArgs, '--format=%H%x1f%aI%x1f%B%x1e']);
+			const out = await gitOutput(repo, [
+				'log',
+				...refs,
+				`--since=${since}`,
+				...authorArgs,
+				'--format=%H%x1f%aI%x1f%B%x1e'
+			]);
 			for (const entry of out.split('\x1e')) {
 				const [hash, date, body] = entry.trim().split('\x1f');
 				if (!hash || seen.has(hash)) continue;

@@ -1,5 +1,5 @@
-import { Glob } from 'bun';
 import { existsSync } from 'node:fs';
+import { glob, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Days } from '../../types/days';
@@ -15,12 +15,12 @@ export const CODEX_HOME = join(homedir(), '.codex');
  *
  * @returns the set of imported Codex thread ids; empty if the ledger is missing or invalid.
  * Called by: loadCodex.
- * Calls: Bun.file().json, asObject, asArray, asString.
+ * Calls: readFile, JSON.parse, asObject, asArray, asString.
  */
 async function importedThreadIds(home: string): Promise<Set<string>> {
 	let ledger: unknown;
 	try {
-		ledger = await Bun.file(join(home, 'external_agent_session_imports.json')).json();
+		ledger = JSON.parse(await readFile(join(home, 'external_agent_session_imports.json'), 'utf8'));
 	} catch {
 		// No ledger (Codex never imported anything) or an unreadable one: nothing to skip.
 		return new Set();
@@ -60,10 +60,11 @@ export async function loadCodex(days: Days, since: string, home = CODEX_HOME): P
 	let files = 0;
 	for (const root of ['sessions', 'archived_sessions'].map((dir) => join(home, dir))) {
 		if (!existsSync(root)) continue;
-		for await (const relativePath of new Glob('**/*.jsonl').scan({ cwd: root, onlyFiles: true })) {
+		for await (const entry of glob('**/*.jsonl', { cwd: root, withFileTypes: true })) {
+			if (!entry.isFile()) continue;
 			files++;
 			const records: Record<string, unknown>[] = [];
-			for await (const raw of readJsonl(join(root, relativePath))) records.push(asObject(raw));
+			for await (const raw of readJsonl(join(entry.parentPath, entry.name))) records.push(asObject(raw));
 
 			const hasUsageRecords = records.some((record) => record.type === 'token_usage_record');
 			const seenResponses = new Set<string>();

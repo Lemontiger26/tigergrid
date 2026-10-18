@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type { Day, Days } from '../types/days';
 
 /**
@@ -81,10 +82,10 @@ export function bumpProject(aggregate: Day, cwd: string | undefined) {
  *
  * @returns an async generator of parsed records, in file order.
  * Called by: loadClaude, loadCodex.
- * Calls: Bun.file().text, JSON.parse.
+ * Calls: readFile, JSON.parse.
  */
 export async function* readJsonl(path: string): AsyncGenerator<unknown> {
-	const text = await Bun.file(path).text();
+	const text = await readFile(path, 'utf8');
 	for (const line of text.split('\n')) {
 		if (!line) continue;
 		let record: unknown;

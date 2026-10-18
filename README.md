@@ -15,33 +15,52 @@ Run `bun start --help` for all flags.
 
 ### Exports
 
-| Script | Output |
-| --- | --- |
-| `bun run svg` | `out/tigergrid.svg`, 53 weeks of prompts. Extra flags pass through: `bun run svg -m tokens -t claude` |
+| Script            | Output                                                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| `bun run svg`     | `out/tigergrid.svg`, 53 weeks of prompts. Extra flags pass through: `bun run svg -m tokens -t claude`       |
 | `bun run svg:all` | `out/tigergrid-<metric>.svg` for all five metrics. Extra flags pass through: `bun run svg:all --cells wide` |
-| `bun run json` | `out/tigergrid.json`, per-day sessions/prompts/tokens/commits/projects. Flags pass through too. |
+| `bun run json`    | `out/tigergrid.json`, per-day sessions/prompts/tokens/commits/projects. Flags pass through too.             |
 
 SVGs follow the viewer's `prefers-color-scheme`. Each metric has its own colour: lime (prompts), blue (sessions), violet (tokens), mint (commits), rose (AI-assisted commits). Light ramps run from pastel tag fills to saturated tag text; dark ramps go from dim tints to neon on a near-black card. Colours live in `PALETTES` / `THEME` in `src/grid.ts`.
 
 ## Sources and counting rules
 
-| Source | Location | Notes |
-| --- | --- | --- |
-| Claude Code | `~/.claude/projects/**/*.jsonl` (`--claude-dir`) | Prompts = human user turns (no tool results, slash-command echoes, meta or sidechain messages). Usage is deduplicated by message id because one response spans several lines. |
-| Codex | `~/.codex/sessions`, `~/.codex/archived_sessions` (`--codex-dir` sets the `~/.codex` part) | Prompts = `task_started` turns outside sub-agent threads. Threads listed in `external_agent_session_imports.json` are skipped: they are copies of Claude Code sessions, already counted at the source. |
-| git | repos under `--git-root` (default `~/develop`, depth 4) | Filtered by `--author` (default `git config user.email`), deduplicated by hash across worktrees. "AI-assisted" = an agent `Co-Authored-By` trailer or a `Generated with …` footer. |
+| Source      | Location                                                                                   | Notes                                                                                                                                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Claude Code | `~/.claude/projects/**/*.jsonl` (`--claude-dir`)                                           | Prompts = human user turns (no tool results, slash-command echoes, meta or sidechain messages). Usage is deduplicated by message id because one response spans several lines.                          |
+| Codex       | `~/.codex/sessions`, `~/.codex/archived_sessions` (`--codex-dir` sets the `~/.codex` part) | Prompts = `task_started` turns outside sub-agent threads. Threads listed in `external_agent_session_imports.json` are skipped: they are copies of Claude Code sessions, already counted at the source. |
+| git         | repos under `--git-root` (default `~/develop`, depth 4)                                    | Filtered by `--author` (default `git config user.email`), deduplicated by hash across worktrees. "AI-assisted" = an agent `Co-Authored-By` trailer or a `Generated with …` footer.                     |
 
 `tokens` means fresh tokens: uncached input + cache writes + output. Cache reads are excluded because they would swamp everything else.
+
+## Node.js
+
+The runtime uses Node.js APIs and supports Node.js 22.17 or newer. Bun remains the
+build tool and test runner. Build and run the JavaScript CLI with:
+
+```sh
+bun run build:node
+node dist/node/cli.js --help
+bun run test:node # run CLI integration tests under Node.js
+```
+
+The npm CLI entry point uses this JavaScript build; packing builds it automatically.
+The package does not yet expose a public parser API.
+
+Grid’s intended boundary is resolving agent activity to repositories. Applications consuming its data own
+any higher-level grouping of repositories into projects. The current daily export
+still uses shortened working-directory labels; canonical repository resolution and
+session-level exports are planned.
 
 ## Standalone binaries
 
 `bun run build` compiles single-file executables into `dist/` (no Bun needed to run them), plus `dist/SHA256SUMS`:
 
-| Binary | Platform |
-| --- | --- |
+| Binary                   | Platform               |
+| ------------------------ | ---------------------- |
 | `tigergrid-darwin-arm64` | macOS on Apple silicon |
-| `tigergrid-linux-x64` | Linux x86-64 (glibc) |
-| `tigergrid-linux-arm64` | Linux ARM64 (glibc) |
+| `tigergrid-linux-x64`    | Linux x86-64 (glibc)   |
+| `tigergrid-linux-arm64`  | Linux ARM64 (glibc)    |
 
 `bun scripts/build.ts bun-linux-x64` builds a single target. `tigergrid --version` prints the version and the commit the binary was built from (`-dirty` if the working tree had uncommitted changes). Compiled binaries ignore `.env` and `bunfig.toml` files in the directory they run from. CI builds and smoke-tests each binary on matching hardware and attaches them to the run.
 

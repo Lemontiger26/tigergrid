@@ -29,7 +29,8 @@ const FIXTURE_ARGS = [
 
 /** Run the CLI with plain output; returns exit code, stdout and stderr. */
 function cli(...args: string[]) {
-	const result = Bun.spawnSync(['bun', 'src/cli.ts', ...args], { env: { ...process.env, NO_COLOR: '1' } });
+	const command = process.env.TIGERGRID_TEST_NODE === '1' ? ['node', 'dist/node/cli.js'] : ['bun', 'src/cli.ts'];
+	const result = Bun.spawnSync([...command, ...args], { env: { ...process.env, NO_COLOR: '1' } });
 	return { code: result.exitCode, stdout: result.stdout.toString(), stderr: result.stderr.toString() };
 }
 
@@ -91,8 +92,8 @@ describe('terminal output', () => {
 });
 
 describe('--svg', () => {
-	test('writes a git-titled SVG for git metrics', () => {
-		const path = join(out, 'ai.svg');
+	test('writes a git-titled SVG and creates missing parent directories', () => {
+		const path = join(out, 'nested', 'ai.svg');
 		const result = cli('-m', 'ai', '--svg', path, ...FIXTURE_ARGS);
 		expect(result.code).toBe(0);
 		expect(existsSync(path)).toBe(true);
@@ -100,6 +101,8 @@ describe('--svg', () => {
 		expect(svg).toContain('Git activity');
 		expect(svg).toContain('ui-monospace'); // matrix by default, like the terminal
 		expect(svg).toContain('AI-assisted commits');
+		expect(svg).not.toContain('href=');
+		expect(svg).not.toContain('Made with');
 	});
 });
 
