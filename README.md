@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Lemontiger26/tigergrid/actions/workflows/ci.yml/badge.svg)](https://github.com/Lemontiger26/tigergrid/actions/workflows/ci.yml)
 
-A GitHub-style contribution graph of your AI coding agents: Claude Code and Codex sessions, prompts and tokens, plus the share of your git commits that agents co-authored. Everything is read locally; nothing leaves the machine.
+A GitHub-style contribution graph of your AI coding agents: Claude Code and Codex sessions, prompts and tokens, plus the share of your git commits that agents co-authored. Everything is read locally; nothing leaves the machine (`test/network.test.ts` runs every CLI mode under strace and fails on any network connection).
 
 ```sh
 bun install

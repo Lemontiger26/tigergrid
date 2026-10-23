@@ -32,6 +32,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # test/network.test.ts traces the CLI with strace to prove it makes no connections.
+      - name: Install strace
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends strace
+
       # The same chain as the husky pre-commit hook (`bun run precommit`).
       - name: Format check
         run: bun run format:check
@@ -60,6 +64,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: bun install --frozen-lockfile
+      - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends strace
       - run: bun run test:node
 
   # Each target is built and smoke-tested on matching hardware (scripts/smoke.ts); the

@@ -24,7 +24,7 @@
 		"svg:all": "bun scripts/svg-all.ts",
 		"json": "mkdir -p out && bun src/cli.ts -w 53 --json > out/tigergrid.json",
 		"test": "bun test",
-		"test:node": "bun run build:node && TIGERGRID_TEST_NODE=1 bun test test/cli.test.ts",
+		"test:node": "bun run build:node && TIGERGRID_TEST_NODE=1 bun test test/cli.test.ts test/network.test.ts",
 		"check": "tsc --noEmit",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
